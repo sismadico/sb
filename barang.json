@@ -1,0 +1,7 @@
+[
+  { "kode": "BRG-001", "nama": "Beras Premium 5 kg", "kategori": "Sembako",  "satuan": "karung", "harga": 72000, "stok": 40,  "keterangan": "Stok gudang utama" },
+  { "kode": "BRG-002", "nama": "Minyak Goreng 2 L",  "kategori": "Sembako",  "satuan": "botol",  "harga": 38000, "stok": 65,  "keterangan": "" },
+  { "kode": "BRG-003", "nama": "Gula Pasir 1 kg",    "kategori": "Sembako",  "satuan": "kg",     "harga": 17500, "stok": 120, "keterangan": "" },
+  { "kode": "BRG-004", "nama": "Sabun Cuci Piring",  "kategori": "Rumah Tangga", "satuan": "pcs", "harga": 9500, "stok": 80,  "keterangan": "Aroma jeruk" },
+  { "kode": "BRG-005", "nama": "Kopi Bubuk 200 g",   "kategori": "Minuman",  "satuan": "pak",    "harga": 24000, "stok": 55,  "keterangan": "" }
+]

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Uji Prinsip - MVCS</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- Layer kosong: seluruh isi dirender oleh app.js -->
+<div class="app" id="app">
+  <div id="header"></div>
+  <div id="menu"></div>
+  <div id="content"></div>
+  <div id="footer"></div>
+</div>
+<div id="modal"></div>
+<div id="drawer"></div>
+
+<script>
+/* =============================================================
+   CONFIG -- satu-satunya tempat mendefinisikan menu & dataset.
+   Menambah menu baru = menambah satu objek di `menu`.
+   Kolom tabel & field form diturunkan otomatis dari isi JSON;
+   `fields` hanya untuk menimpa (type/options/readonly).
+
+   mode   : 'offline' -> IndexedDB (seed dari file JSON)
+            'online'  -> API gateway (Worker + D1), JSON
+   pk     : kolom kunci;  auto:true -> id berurutan otomatis
+   ============================================================= */
+window.APP_CONFIG = {
+  brand: 'Uji Prinsip',
+  mode: 'offline',
+  apiBase: '/api',
+  dbName: 'uji-prinsip-db',
+  menu: [
+    { key: 'users', label: 'Users', source: 'users.json', pk: 'id', auto: true,
+      fields: {
+        grup:   { type: 'select', options: ['SA', 'ADMIN', 'GUDANG', 'POS'] },
+        status: { type: 'select', options: ['aktif', 'nonaktif'] }
+      } },
+    { key: 'barang', label: 'Barang', source: 'barang.json', pk: 'kode',
+      fields: {
+        kategori: { type: 'select', options: ['Sembako', 'Rumah Tangga', 'Minuman'] }
+      } }
+  ]
+};
+</script>
+<script src="app.js"></script>
+</body>
+</html>
