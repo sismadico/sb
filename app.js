@@ -176,7 +176,7 @@ const app = {
       /* Satu drawer generik untuk semua form; isinya ditentukan DRAWERS[kind]. */
       drawer: () => `
         <div class="drawer-scrim" id="drawerScrim"></div>
-        <aside class="drawer" id="drawer" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="drawerTitle">
+        <aside class="drawer" id="drawerPanel" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="drawerTitle">
           <form class="drawer-form" id="drawerForm">
             <div class="drawer-head">
               <h2 id="drawerTitle"></h2>
@@ -289,16 +289,16 @@ const app = {
         $('drawerAux').classList.toggle('btn-danger', Boolean(aux.danger));
       }
       app.view.showFormError('');
-      $('drawer').classList.add('open');
-      $('drawer').setAttribute('aria-hidden', 'false');
+      $('drawerPanel').classList.add('open');
+      $('drawerPanel').setAttribute('aria-hidden', 'false');
       $('drawerScrim').classList.add('show');
       const first = document.querySelector('#drawerBody input:not([readonly]), #drawerBody select, #drawerBody textarea');
       if (first) first.focus();
     },
     closeDrawer(){
       const $ = app.view.$;
-      $('drawer').classList.remove('open');
-      $('drawer').setAttribute('aria-hidden', 'true');
+      $('drawerPanel').classList.remove('open');
+      $('drawerPanel').setAttribute('aria-hidden', 'true');
       $('drawerScrim').classList.remove('show');
     },
     showFormError(msg){
