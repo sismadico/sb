@@ -18,6 +18,11 @@ const app = {
     active: null,      // key menu aktif
     activeModule: null, // key modul aktif
     filters: {},       // saringan cepat: kolom -> nilai
+    page: 1,           // halaman tabel aktif
+    pageSize: (window.APP_CONFIG.pageSizes || [10])[0],
+    tab: 'table',      // 'table' | 'chart'
+    chartIndex: 0,     // grafik terpilih di menu aktif
+    chartType: null,   // null = ikuti type bawaan grafik
     term: '',          // kata kunci pencarian (diisi lewat drawer pencarian)
     field: '',         // kolom pencarian; '' = semua kolom
     drawer: null,      // { kind: 'row' | 'search', mode?, index?, row? }
@@ -54,7 +59,38 @@ const app = {
         .filter(({ row }) => !t || (field ? [row[field]] : Object.values(row)).some(v => String(v ?? '').toLowerCase().includes(t)));
     },
     hasSearch(){ return Boolean(app.model.term.trim() || Object.values(app.model.filters).some(Boolean)); },
-    resetSearch(){ app.model.term = ''; app.model.field = ''; app.model.filters = {}; },
+    resetSearch(){ app.model.term = ''; app.model.field = ''; app.model.filters = {}; app.model.page = 1; },
+
+    /* Paging: visibleRows() = semua baris lolos saringan (dipakai ekspor, cetak,
+       grafik); pagedRows() = potongan halaman aktif untuk tabel layar. */
+    pageCount(){ return Math.max(1, Math.ceil(app.model.visibleRows().length / app.model.pageSize)); },
+    pagedRows(){
+      const m = app.model;
+      m.page = Math.min(Math.max(1, m.page), m.pageCount());   // aman setelah hapus/saring
+      return m.visibleRows().slice((m.page - 1) * m.pageSize, m.page * m.pageSize);
+    },
+
+    /* Grafik terpadu: definisi dari config item (`charts`); bila tidak ada,
+       otomatis satu grafik jumlah per kolom bertipe select. */
+    chartsOf(){
+      const m = app.model.current();
+      if (m.charts) return m.charts;
+      return Object.entries(m.fields || {}).filter(([, f]) => f.type === 'select')
+        .map(([k]) => ({ label: `Jumlah per ${app.model.label(k)}`, by: k, type: 'pie' }));
+    },
+    /* Mengelompokkan baris TERSARING menurut spec.by: jumlah kolom spec.value,
+       atau hitung baris bila value tidak diisi. Urut dari terbesar. */
+    chartPoints(spec){
+      const groups = new Map();
+      app.model.visibleRows().map(r => r.row)
+        .filter(r => Object.entries(spec.where || {}).every(([k, v]) => String(r[k]) === v))
+        .forEach(r => {
+          const key = String(r[spec.by] ?? '') || '(kosong)';
+          groups.set(key, (groups.get(key) || 0) + (spec.value ? Number(r[spec.value]) || 0 : 1));
+        });
+      return [...groups].map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value);
+    },
+
     uniqueValues(key){
       return [...new Set(app.model.rows().map(r => r[key]).filter(v => v !== '' && v != null))]
         .sort((a, b) => String(a).localeCompare(String(b)));
@@ -182,7 +218,7 @@ const app = {
           </ul>
         </aside>`,
       /* Tidak ada <form> di konten: pencarian dibuka lewat drawer. */
-      content: () => `
+      content: cfg => `
         <main class="main"><section class="panel">
           <h1 class="panel-head" id="pageTitle"></h1>
           <div class="content-body">
@@ -201,10 +237,39 @@ const app = {
               <button type="button" class="btn" id="resetBtn">Muat ulang dari JSON</button>
               <button type="button" class="btn btn-primary" id="addBtn">+ Tambah Data</button>
             </div>
-            <div class="table-wrap"><table>
-              <thead><tr id="tableHead"></tr></thead>
-              <tbody id="tableBody"></tbody>
-            </table></div>
+            <div class="view-tabs" id="viewTabs" role="tablist">
+              <button type="button" class="view-tab active" data-tab="table" role="tab" aria-selected="true">Tabel</button>
+              <button type="button" class="view-tab" data-tab="chart" id="chartTab" role="tab" aria-selected="false" hidden>Grafik</button>
+            </div>
+            <section class="panel chart-panel" id="chartPanel" hidden>
+              <div class="chart-panel-head">
+                <h2>Grafik</h2>
+                <div class="chart-controls">
+                  <label for="chartSelect">Data</label>
+                  <select id="chartSelect"></select>
+                  <label for="chartType">Jenis</label>
+                  <select id="chartType"><option value="bar">Bar</option><option value="pie">Pie</option></select>
+                </div>
+              </div>
+              <div class="chart-body" id="chartBody"></div>
+            </section>
+            <div id="tablePanel">
+              <div class="table-wrap"><table>
+                <thead><tr id="tableHead"></tr></thead>
+                <tbody id="tableBody"></tbody>
+              </table></div>
+              <div class="pager" id="pager">
+                <label for="pageSize">Tampil</label>
+                <select id="pageSize">${(cfg.pageSizes || [10]).map(n => `<option value="${n}">${n}</option>`).join('')}</select>
+                <span class="search-summary" id="pageInfo"></span>
+                <div class="pager-nav">
+                  <button type="button" class="btn" id="prevPage">&lsaquo; Sebelumnya</button>
+                  <label for="pageSelect" class="visually-hidden">Halaman</label>
+                  <select id="pageSelect"></select>
+                  <button type="button" class="btn" id="nextPage">Berikutnya &rsaquo;</button>
+                </div>
+              </div>
+            </div>
           </div>
         </section></main>`,
       footer: cfg => `
@@ -326,7 +391,7 @@ const app = {
       app.view.renderTable();
     },
     renderTable(){
-      const cols = app.model.columns(), rows = app.model.visibleRows(), esc = app.view.escapeHtml, $ = app.view.$;
+      const cols = app.model.columns(), rows = app.model.pagedRows(), esc = app.view.escapeHtml, $ = app.view.$;
       $('tableHead').innerHTML = cols.map(c => `<th>${esc(app.model.label(c))}</th>`).join('');
       $('tableBody').innerHTML = rows.length
         ? rows.map(({ row, index }) => `
@@ -334,8 +399,10 @@ const app = {
               ${cols.map(c => `<td data-label="${esc(app.model.label(c))}">${esc(row[c])}</td>`).join('')}
             </tr>`).join('')
         : `<tr class="empty-row"><td colspan="${cols.length || 1}">Tidak ada data.</td></tr>`;
-      $('dataCount').textContent = `Jumlah Data: ${rows.length}`;
+      $('dataCount').textContent = `Jumlah Data: ${app.model.visibleRows().length}`;
       app.view.renderSearchSummary();
+      app.view.renderPager();
+      app.view.renderChart();
     },
     searchSummaryText(){
       const { term, field, filters } = app.model, parts = [];
@@ -405,6 +472,86 @@ const app = {
       app.view.$('profilePhoto').innerHTML = app.view.avatarHtml(app.model.drawer.foto, app.model.session.nama, 'avatar-lg');
     },
 
+    renderPager(){
+      const $ = app.view.$, m = app.model, total = m.visibleRows().length, pages = m.pageCount();
+      const from = total ? (m.page - 1) * m.pageSize + 1 : 0, to = Math.min(total, m.page * m.pageSize);
+      $('pageSize').value = String(m.pageSize);
+      $('pageInfo').textContent = `Menampilkan ${from}-${to} dari ${total}`;
+      $('pageSelect').innerHTML = Array.from({ length: pages }, (_, i) =>
+        `<option value="${i + 1}"${i + 1 === m.page ? ' selected' : ''}>${i + 1} / ${pages}</option>`).join('');
+      $('prevPage').disabled = m.page <= 1;
+      $('nextPage').disabled = m.page >= pages;
+    },
+
+    /* ---- Grafik (SVG murni, warna dari design token) ---- */
+    CHART_COLORS: ['--blue-900', '--blue-500', '--blue-700', '--blue-300', '--blue-800', '--blue-600'],
+    chartColor: i => `var(${app.view.CHART_COLORS[i % app.view.CHART_COLORS.length]})`,
+    formatValue: v => Number(v).toLocaleString('id-ID', { maximumFractionDigits: 2 }),
+    truncate(text, max = 18){ const t = String(text); return t.length <= max ? t : `${t.slice(0, max - 1)}\u2026`; },
+    barChartSvg(points){
+      const esc = app.view.escapeHtml, shown = points.slice(0, 15);
+      const W = 640, rowH = 28, gap = 8, labelW = 150, valueW = 100, chartW = W - labelW - valueW;
+      const max = Math.max(...shown.map(p => p.value), 0) || 1, H = shown.length * (rowH + gap) + gap;
+      const bars = shown.map((p, i) => {
+        const y = gap + i * (rowH + gap), w = Math.max((p.value / max) * chartW, 1);
+        return `
+          <text x="${labelW - 8}" y="${y + rowH / 2 + 4}" text-anchor="end" font-size="12" style="fill:var(--ink)">${esc(app.view.truncate(p.label))}</text>
+          <rect x="${labelW}" y="${y}" width="${w}" height="${rowH}" rx="3" style="fill:${app.view.chartColor(i)}"></rect>
+          <text x="${labelW + w + 6}" y="${y + rowH / 2 + 4}" font-size="12" style="fill:var(--ink)">${esc(app.view.formatValue(p.value))}</text>`;
+      }).join('');
+      return `<svg class="chart-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="Grafik batang">${bars}</svg>`
+        + (points.length > shown.length ? `<p class="chart-empty">Menampilkan ${shown.length} teratas dari ${points.length}.</p>` : '');
+    },
+    pieChartSvg(points){
+      const esc = app.view.escapeHtml, pos = points.filter(p => p.value > 0);
+      if (!pos.length) return '<p class="chart-empty">Tidak ada nilai positif untuk grafik pie.</p>';
+      const total = pos.reduce((sum, p) => sum + p.value, 0), c = 110, r = 100;
+      let a0 = -Math.PI / 2;
+      const slices = pos.length === 1
+        ? `<circle cx="${c}" cy="${c}" r="${r}" style="fill:${app.view.chartColor(0)}"></circle>`
+        : pos.map((p, i) => {
+            const a1 = a0 + (p.value / total) * Math.PI * 2, big = a1 - a0 > Math.PI ? 1 : 0;
+            const d = `M ${c} ${c} L ${(c + r * Math.cos(a0)).toFixed(2)} ${(c + r * Math.sin(a0)).toFixed(2)} A ${r} ${r} 0 ${big} 1 ${(c + r * Math.cos(a1)).toFixed(2)} ${(c + r * Math.sin(a1)).toFixed(2)} Z`;
+            a0 = a1;
+            return `<path d="${d}" style="fill:${app.view.chartColor(i)};stroke:var(--white);stroke-width:1"></path>`;
+          }).join('');
+      const legend = pos.map((p, i) => `
+        <li><span class="swatch" style="background:${app.view.chartColor(i)}"></span>${esc(app.view.truncate(p.label, 24))} \u2014 ${esc(app.view.formatValue(p.value))} (${((p.value / total) * 100).toFixed(1)}%)</li>`).join('');
+      return `<svg class="chart-svg" viewBox="0 0 220 220" role="img" aria-label="Grafik pie">${slices}</svg><ul class="chart-legend">${legend}</ul>`;
+    },
+    chartSvg(spec, type){
+      const points = app.model.chartPoints(spec);
+      if (!points.length) return '<p class="chart-empty">Tidak ada data untuk grafik ini.</p>';
+      return type === 'pie' ? app.view.pieChartSvg(points) : app.view.barChartSvg(points);
+    },
+    currentChart(){
+      const m = app.model, charts = m.chartsOf(), spec = charts[Math.min(m.chartIndex, charts.length - 1)];
+      return spec ? { spec, type: m.chartType || spec.type || 'bar' } : null;
+    },
+    renderChart(){
+      const $ = app.view.$, esc = app.view.escapeHtml, m = app.model, charts = m.chartsOf(), has = charts.length > 0;
+      const tab = has ? m.tab : 'table';   // menu tanpa grafik selalu menampilkan tabel
+      $('chartTab').hidden = !has;
+      $('tablePanel').hidden = tab !== 'table';
+      $('chartPanel').hidden = tab !== 'chart';
+      document.querySelectorAll('#viewTabs .view-tab').forEach(b => {
+        const on = b.dataset.tab === tab;
+        b.classList.toggle('active', on);
+        b.setAttribute('aria-selected', String(on));
+      });
+      if (tab !== 'chart') return;
+      m.chartIndex = Math.min(m.chartIndex, charts.length - 1);
+      const { spec, type } = app.view.currentChart();
+      $('chartSelect').innerHTML = charts.map((c, i) => `<option value="${i}"${i === m.chartIndex ? ' selected' : ''}>${esc(c.label)}</option>`).join('');
+      $('chartType').value = type;
+      $('chartBody').innerHTML = app.view.chartSvg(spec, type);
+    },
+    /* Grafik terpilih ikut tercetak (di atas tabel). */
+    printChartHtml(){
+      const cur = app.view.currentChart();
+      return cur ? `<h3 class="print-section-title">${app.view.escapeHtml(cur.spec.label)}</h3><div class="print-chart-wrap">${app.view.chartSvg(cur.spec, cur.type)}</div>` : '';
+    },
+
     /* ---- Modal cetak: pratinjau statis dari data yang sedang tersaring ---- */
     buildPrint(){
       const esc = app.view.escapeHtml, m = app.model.current(), cols = app.model.columns(), rows = app.model.visibleRows();
@@ -422,6 +569,7 @@ const app = {
             <p>Total baris: ${rows.length}</p>
           </div>
         </div>
+        ${app.view.printChartHtml()}
         ${rows.length ? `<table class="print-table">
           <thead><tr>${cols.map(c => `<th>${esc(app.model.label(c))}</th>`).join('')}</tr></thead>
           <tbody>${rows.map(({ row }) => `<tr>${cols.map(c => `<td>${esc(row[c])}</td>`).join('')}</tr>`).join('')}</tbody>
@@ -527,6 +675,7 @@ const app = {
       m.active = item.key;
       m.activeModule = item.module;
       m.resetSearch();   // saringan tidak dibawa antar menu
+      m.chartIndex = 0; m.chartType = null;
       app.view.renderPage();
     },
 
@@ -572,6 +721,21 @@ const app = {
       $('drawerAux').addEventListener('click', () => c.drawerHandlers[app.model.drawer.kind].aux());
       ['drawerCancel', 'drawerClose', 'drawerScrim'].forEach(id => $(id).addEventListener('click', app.view.closeDrawer));
 
+      // Paging & grafik.
+      const redraw = () => app.view.renderTable();
+      $('pageSize').addEventListener('change', e => { app.model.pageSize = Number(e.target.value); app.model.page = 1; redraw(); });
+      $('prevPage').addEventListener('click', () => { app.model.page--; redraw(); });
+      $('nextPage').addEventListener('click', () => { app.model.page++; redraw(); });
+      $('pageSelect').addEventListener('change', e => { app.model.page = Number(e.target.value); redraw(); });
+      $('viewTabs').addEventListener('click', e => {
+        const b = e.target.closest('.view-tab');
+        if (!b) return;
+        app.model.tab = b.dataset.tab;
+        app.view.renderChart();
+      });
+      $('chartSelect').addEventListener('change', e => { app.model.chartIndex = Number(e.target.value); app.model.chartType = null; app.view.renderChart(); });
+      $('chartType').addEventListener('change', e => { app.model.chartType = e.target.value; app.view.renderChart(); });
+
       // Modul, ekspor/impor, cetak, foto profil.
       $('moduleSwitcher').addEventListener('click', e => {
         const b = e.target.closest('button[data-module]');
@@ -600,6 +764,7 @@ const app = {
       const form = new FormData(e.target);
       app.model.term = String(form.get('term') || '');
       app.model.field = String(form.get('field') || '');
+      app.model.page = 1;
       (app.model.current().filters || []).forEach(k => { app.model.filters[k] = String(form.get(`filter_${k}`) || ''); });
       app.view.renderTable();
       app.view.closeDrawer();

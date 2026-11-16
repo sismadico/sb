@@ -33,6 +33,7 @@ window.APP_CONFIG = {
   brand: 'Uji Prinsip',
   mode: 'offline',
   apiBase: '/api',
+  pageSizes: [10, 50, 100],   // pilihan jumlah baris per halaman (yang pertama = bawaan)
   /* Login: offline memeriksa dataset `source` (tanpa menyimpan password
      di frontend), online memanggil POST {apiBase}/auth/login. */
   auth: { sessionKey: 'uji-prinsip-session', source: 'users',
@@ -42,10 +43,16 @@ window.APP_CONFIG = {
   /* Grup modul -> item menu. Menambah menu = menambah satu objek `items`.
      fields.options: array statis, atau { ref: item, key: kolom } untuk
      mengambil pilihan dari dataset lain (relasi).
+     charts: [{ label, by, value?, where?, type? }] -> grafik terpadu: kelompokkan baris
+       menurut kolom `by`, jumlahkan kolom `value` (tanpa value = hitung baris), `where`
+       menyaring baris, type 'bar' | 'pie'. Tanpa `charts`, otomatis dibuat grafik jumlah
+       per kolom bertipe select.
      filters: kolom yang muncul sebagai saringan cepat di drawer pencarian. */
   modules: [
     { key: 'master', label: 'Master', items: [
       { key: 'users', label: 'Users', source: 'users.json', pk: 'id', auto: true,
+        charts: [{ label: 'User per Grup', by: 'grup', type: 'pie' },
+                 { label: 'User per Status', by: 'status', type: 'pie' }],
         fields: { grup: { type: 'select', options: { ref: 'akses', key: 'kode' } },
                   status: { type: 'select', options: ['aktif', 'nonaktif'] } } },
       { key: 'setting', label: 'Setting', source: 'setting.json', pk: 'kode' },
@@ -53,8 +60,13 @@ window.APP_CONFIG = {
     ] },
     { key: 'inventory', label: 'Inventory', items: [
       { key: 'barang', label: 'Barang', source: 'barang.json', pk: 'kode',
+        charts: [{ label: 'Stok per Barang', by: 'nama', value: 'stok', type: 'bar' },
+                 { label: 'Stok per Kategori', by: 'kategori', value: 'stok', type: 'pie' },
+                 { label: 'Jumlah Barang per Kategori', by: 'kategori', type: 'pie' }],
         fields: { kategori: { type: 'select', options: ['Sembako', 'Rumah Tangga', 'Minuman'] } } },
       { key: 'distribusi', label: 'Distribusi', source: 'distribusi.json', pk: 'id', auto: true,
+        charts: [{ label: 'Keluar per Lokasi (dari)', by: 'dari', value: 'banyak', type: 'bar' },
+                 { label: 'Masuk per Lokasi (ke)', by: 'ke', value: 'banyak', type: 'bar' }],
         fields: { kode: { type: 'select', options: { ref: 'barang', key: 'kode' } },
                   dari: { type: 'select', options: { ref: 'lokasi', key: 'nama' } },
                   ke:   { type: 'select', options: { ref: 'lokasi', key: 'nama' } } } },
@@ -63,10 +75,14 @@ window.APP_CONFIG = {
     ] },
     { key: 'pos', label: 'POS', items: [
       { key: 'transaksi', label: 'Transaksi', source: 'transaksi.json', pk: 'invoice', filters: ['jenis', 'status'],
+        charts: [{ label: 'Penjualan per Kontak', by: 'kontak', value: 'total', where: { jenis: 'Jual' }, type: 'bar' },
+                 { label: 'Pembelian per Kontak', by: 'kontak', value: 'total', where: { jenis: 'Beli' }, type: 'bar' },
+                 { label: 'Total Jual vs Beli', by: 'jenis', value: 'total', type: 'pie' }],
         fields: { jenis: { type: 'select', options: ['Jual', 'Beli'] },
                   kontak: { type: 'select', options: { ref: 'kontak', key: 'nama' } },
                   status: { type: 'select', options: ['Draft', 'Selesai', 'Batal'] } } },
       { key: 'kontak', label: 'Kontak', source: 'kontak.json', pk: 'kode', filters: ['jenis'],
+        charts: [{ label: 'Kontak per Jenis (Vendor / Customer)', by: 'jenis', type: 'pie' }],
         fields: { jenis: { type: 'select', options: ['Vendor', 'Customer'] } } }
     ] },
     { key: 'finance', label: 'Finance', items: [

@@ -751,3 +751,12 @@ tbody tr[data-index]:hover{ background:var(--blue-50); }
   body:not(.printing) *{ visibility:visible; }
   body:not(.printing) #printOverlay{ display:none !important; }
 }
+
+/* ---- Paging ---- */
+.pager{
+  display:flex; align-items:center; gap:var(--gap-md); flex-wrap:wrap;
+  margin-top:var(--gap-md); font-size:13px;
+}
+.pager select{ padding:5px 8px; border:1px solid var(--line); border-radius:var(--radius-sm); background:var(--white); }
+.pager-nav{ display:flex; align-items:center; gap:var(--gap-sm); margin-left:auto; }
+.pager .btn:disabled{ opacity:.55; cursor:not-allowed; }
