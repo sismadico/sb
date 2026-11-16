@@ -1,7 +1,7 @@
 /* Worker API untuk mode online (apiBase '/api'). Respons: { ok, data } / { ok:false, error:{message} }.
    PERHATIAN: app.js belum mengirim token, jadi endpoint dataset TIDAK terautentikasi.
    Lindungi dengan Cloudflare Access / rute internal sebelum dipakai publik. */
-const KEYS = ['users', 'setting', 'akses', 'barang', 'distribusi', 'lokasi', 'stok', 'transaksi', 'item_transaksi', 'kontak', 'akun', 'jurnal', 'laporan', 'dashboard'];
+const KEYS = ['users', 'setting', 'akses', 'barang', 'distribusi', 'lokasi', 'stok', 'transaksi', 'item_transaksi', 'kontak', 'akun', 'jurnal', 'laporan', 'landing', 'dashboard'];
 const out = (data, status = 200) => new Response(JSON.stringify(status < 400 ? { ok: true, data } : { ok: false, error: { message: data } }),
   { status, headers: { 'Content-Type': 'application/json' } });
 const hash = async (u, pw) => {   // PBKDF2-SHA256, salt = username (sama dengan seed.mjs)

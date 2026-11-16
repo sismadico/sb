@@ -63,6 +63,9 @@ window.APP_CONFIG = {
                  { label: 'User per Status', by: 'status', type: 'pie' }],
         fields: { grup: { type: 'select', options: { ref: 'akses', key: 'kode' } },
                   status: { type: 'select', options: ['aktif', 'nonaktif'] } } },
+      { key: 'landing', label: 'Landing', source: 'landing.json', pk: 'kode', filters: ['bagian', 'aktif'],
+        fields: { bagian: { type: 'select', options: ['hero', 'fitur', 'katalog', 'kontak', 'footer'] },
+                  isi: { type: 'textarea' }, aktif: { type: 'select', options: ['ya', 'tidak'] } } },
       { key: 'setting', label: 'Setting', source: 'setting.json', pk: 'kode' },
       { key: 'akses', label: 'Akses', source: 'akses.json', pk: 'kode' }
     ] },
@@ -116,5 +119,6 @@ window.APP_CONFIG = {
 <script src="app.js"></script>
 <script src="dashboard.js"></script>
 <script src="kasir.js"></script>
+<script src="landing.js"></script>
 </body>
 </html>

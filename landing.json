@@ -1,0 +1,79 @@
+[
+ {
+  "kode": "LP-001",
+  "bagian": "hero",
+  "urutan": 1,
+  "judul": "Toko Uji Prinsip",
+  "isi": "Kelola stok, kasir, dan keuangan toko dalam satu aplikasi terpadu.",
+  "ikon": "",
+  "tombol": "Masuk ke Aplikasi",
+  "tautan": "masuk",
+  "aktif": "ya"
+ },
+ {
+  "kode": "LP-002",
+  "bagian": "fitur",
+  "urutan": 2,
+  "judul": "Stok per Lokasi",
+  "isi": "Pantau stok gudang dan toko, lengkap dengan distribusi masuk dan keluar.",
+  "ikon": "📦",
+  "tombol": "",
+  "tautan": "",
+  "aktif": "ya"
+ },
+ {
+  "kode": "LP-003",
+  "bagian": "fitur",
+  "urutan": 3,
+  "judul": "Kasir Cash & QRIS",
+  "isi": "Katalog, keranjang belanja, dan pembayaran tunai atau QRIS.",
+  "ikon": "🧾",
+  "tombol": "",
+  "tautan": "",
+  "aktif": "ya"
+ },
+ {
+  "kode": "LP-004",
+  "bagian": "fitur",
+  "urutan": 4,
+  "judul": "Laporan Keuangan",
+  "isi": "Setiap transaksi otomatis tercatat di jurnal dan laporan kas.",
+  "ikon": "📊",
+  "tombol": "",
+  "tautan": "",
+  "aktif": "ya"
+ },
+ {
+  "kode": "LP-005",
+  "bagian": "katalog",
+  "urutan": 5,
+  "judul": "Produk Kami",
+  "isi": "Barang yang tersedia di toko.",
+  "ikon": "",
+  "tombol": "",
+  "tautan": "",
+  "aktif": "ya"
+ },
+ {
+  "kode": "LP-006",
+  "bagian": "kontak",
+  "urutan": 6,
+  "judul": "Hubungi Kami",
+  "isi": "Toko Pusat, Jakarta. Ubah alamat dan nomor kontak di menu Master > Landing.",
+  "ikon": "",
+  "tombol": "",
+  "tautan": "",
+  "aktif": "ya"
+ },
+ {
+  "kode": "LP-007",
+  "bagian": "footer",
+  "urutan": 7,
+  "judul": "",
+  "isi": "© Toko Uji Prinsip",
+  "ikon": "",
+  "tombol": "",
+  "tautan": "",
+  "aktif": "ya"
+ }
+]
