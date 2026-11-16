@@ -1,0 +1,18 @@
+[
+ {
+  "invoice": "INV-JL-0001",
+  "tanggal": "2026-11-12",
+  "jenis": "Jual",
+  "kontak": "Budi Santoso",
+  "total": 144000,
+  "status": "Selesai"
+ },
+ {
+  "invoice": "INV-BL-0001",
+  "tanggal": "2026-11-10",
+  "jenis": "Beli",
+  "kontak": "PT Sumber Pangan",
+  "total": 2880000,
+  "status": "Selesai"
+ }
+]

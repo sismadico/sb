@@ -1,6 +1,37 @@
 [
-  { "id": 1, "username": "wawan",  "nama": "Wawan",        "grup": "SA",      "status": "aktif" },
-  { "id": 2, "username": "admin",  "nama": "Admin Toko",   "grup": "ADMIN",   "status": "aktif" },
-  { "id": 3, "username": "gudang", "nama": "Staf Gudang",  "grup": "GUDANG",  "status": "aktif" },
-  { "id": 4, "username": "kasir",  "nama": "Kasir POS",    "grup": "POS",     "status": "nonaktif" }
+ {
+  "id": 1,
+  "username": "wawan",
+  "nama": "Wawan",
+  "grup": "SA",
+  "status": "aktif"
+ },
+ {
+  "id": 2,
+  "username": "admin",
+  "nama": "Admin Toko",
+  "grup": "ADMIN",
+  "status": "aktif"
+ },
+ {
+  "id": 3,
+  "username": "gudang",
+  "nama": "Staf Gudang",
+  "grup": "GUDANG",
+  "status": "aktif"
+ },
+ {
+  "id": 4,
+  "username": "kasir",
+  "nama": "Kasir POS",
+  "grup": "POS",
+  "status": "nonaktif"
+ },
+ {
+  "id": 5,
+  "username": "akunting",
+  "nama": "Staf Finance",
+  "grup": "FINANCE",
+  "status": "aktif"
+ }
 ]

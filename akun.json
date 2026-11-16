@@ -1,0 +1,27 @@
+[
+ {
+  "kode": "1-100",
+  "nama": "Kas",
+  "tipe": "Aset"
+ },
+ {
+  "kode": "1-200",
+  "nama": "Persediaan",
+  "tipe": "Aset"
+ },
+ {
+  "kode": "2-100",
+  "nama": "Utang Usaha",
+  "tipe": "Kewajiban"
+ },
+ {
+  "kode": "4-100",
+  "nama": "Penjualan",
+  "tipe": "Pendapatan"
+ },
+ {
+  "kode": "5-100",
+  "nama": "Pembelian",
+  "tipe": "Beban"
+ }
+]

@@ -1,0 +1,23 @@
+[
+ {
+  "kode": "KTK-001",
+  "nama": "PT Sumber Pangan",
+  "jenis": "Vendor",
+  "alamat": "Bekasi",
+  "telepon": "021 555 1"
+ },
+ {
+  "kode": "KTK-002",
+  "nama": "CV Maju Jaya",
+  "jenis": "Vendor",
+  "alamat": "Bogor",
+  "telepon": "021 555 2"
+ },
+ {
+  "kode": "KTK-003",
+  "nama": "Budi Santoso",
+  "jenis": "Customer",
+  "alamat": "Jakarta",
+  "telepon": "0812 111 222"
+ }
+]

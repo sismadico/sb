@@ -16,13 +16,17 @@ const app = {
     cfg: window.APP_CONFIG,
     data: {},          // key -> rows[]
     active: null,      // key menu aktif
+    activeModule: null, // key modul aktif
+    filters: {},       // saringan cepat: kolom -> nilai
     term: '',          // kata kunci pencarian (diisi lewat drawer pencarian)
     field: '',         // kolom pencarian; '' = semua kolom
     drawer: null,      // { kind: 'row' | 'search', mode?, index?, row? }
     session: null,     // { username, nama, grup } | null
     captcha: { a: 0, b: 0 },
 
-    menuOf(key){ return app.model.cfg.menu.find(m => m.key === key); },
+    items(){ return app.model.cfg.modules.flatMap(m => m.items.map(i => ({ ...i, module: m.key }))); },
+    menuOf(key){ return app.model.items().find(i => i.key === key); },
+    moduleOf(key){ return app.model.cfg.modules.find(m => m.key === key); },
     current(){ return app.model.menuOf(app.model.active); },
     rows(){ return app.model.data[app.model.active] || []; },
     fieldCfg(key){ return (app.model.current().fields || {})[key] || {}; },
@@ -43,12 +47,68 @@ const app = {
       return vals.some(v => String(v).length > 60) ? 'textarea' : 'text';
     },
     visibleRows(){
-      const { term, field } = app.model, t = term.trim().toLowerCase();
+      const { term, field, filters } = app.model, t = term.trim().toLowerCase();
       return app.model.rows()
         .map((row, index) => ({ row, index }))
+        .filter(({ row }) => Object.entries(filters).every(([k, v]) => !v || String(row[k] ?? '') === v))
         .filter(({ row }) => !t || (field ? [row[field]] : Object.values(row)).some(v => String(v ?? '').toLowerCase().includes(t)));
     },
-    resetSearch(){ app.model.term = ''; app.model.field = ''; },
+    hasSearch(){ return Boolean(app.model.term.trim() || Object.values(app.model.filters).some(Boolean)); },
+    resetSearch(){ app.model.term = ''; app.model.field = ''; app.model.filters = {}; },
+    uniqueValues(key){
+      return [...new Set(app.model.rows().map(r => r[key]).filter(v => v !== '' && v != null))]
+        .sort((a, b) => String(a).localeCompare(String(b)));
+    },
+    /* Pilihan select: array statis, atau relasi { ref, key } ke dataset lain. */
+    optionsOf(f){
+      if (Array.isArray(f.options)) return f.options;
+      return f.options ? (app.model.data[f.options.ref] || []).map(r => r[f.options.key]) : [];
+    },
+
+    /* CSV: header = key kolom, supaya hasil ekspor bisa diimpor balik. */
+    toCsv(cols, rows){
+      const esc = v => /[",\n\r]/.test(String(v ?? '')) ? `"${String(v).replace(/"/g, '""')}"` : String(v ?? '');
+      return [cols.map(esc).join(','), ...rows.map(r => cols.map(c => esc(r[c])).join(','))].join('\r\n');
+    },
+    fromCsv(text){
+      const rows = []; let row = [], field = '', quoted = false;
+      for (let i = 0; i < text.length; i++){
+        const ch = text[i];
+        if (quoted){
+          if (ch !== '"') field += ch;
+          else if (text[i + 1] === '"'){ field += '"'; i++; }
+          else quoted = false;
+        }
+        else if (ch === '"') quoted = true;
+        else if (ch === ','){ row.push(field); field = ''; }
+        else if (ch === '\n'){ row.push(field); rows.push(row); row = []; field = ''; }
+        else if (ch !== '\r') field += ch;
+      }
+      if (field || row.length){ row.push(field); rows.push(row); }
+      const [head, ...body] = rows.filter(r => r.some(c => c.trim() !== ''));
+      if (!head) return [];
+      const keys = head.map(h => h.trim());
+      return body.map(r => Object.fromEntries(keys.map((k, i) => [k, (r[i] ?? '').trim()])));
+    },
+    /* Upsert berdasarkan kolom kunci (pk): ada -> diperbarui, belum -> ditambah,
+       baris lama yang tidak ada di file tetap dipertahankan. */
+    mergeImport(incoming){
+      const m = app.model.current(), cols = app.model.columns(), rows = [...app.model.rows()];
+      let added = 0, updated = 0, skipped = 0, nextAuto = app.model.nextId();
+      incoming.forEach(raw => {
+        const row = {};
+        Object.keys(raw).filter(k => !cols.length || cols.includes(k)).forEach(k => {
+          row[k] = app.model.typeOf(k) === 'number' && raw[k] !== '' && !Number.isNaN(Number(raw[k])) ? Number(raw[k]) : raw[k];
+        });
+        if (row[m.pk] === '' || row[m.pk] == null){
+          if (!m.auto){ skipped++; return; }
+          row[m.pk] = nextAuto++;
+        }
+        const at = rows.findIndex(r => String(r[m.pk]) === String(row[m.pk]));
+        if (at === -1){ rows.push(row); added++; } else { rows[at] = { ...rows[at], ...row }; updated++; }
+      });
+      return { rows, added, updated, skipped };
+    },
     nextId(){
       return Math.max(0, ...app.model.rows().map(r => Number(r[app.model.current().pk]) || 0)) + 1;
     },
@@ -88,10 +148,16 @@ const app = {
     },
     $: id => document.getElementById(id),
 
+    avatarHtml(foto, nama, cls = ''){
+      const esc = app.view.escapeHtml;
+      return foto
+        ? `<img class="avatar ${cls}" src="${esc(foto)}" alt="">`
+        : `<span class="avatar ${cls}" aria-hidden="true">${esc(String(nama || '?').charAt(0).toUpperCase())}</span>`;
+    },
     sessionHtml(){
       const esc = app.view.escapeHtml, { session } = app.model, mode = esc(app.model.cfg.mode);
       return session
-        ? `Selamat datang <strong>${esc(session.nama)} (${esc(session.grup)})</strong> | <a href="#" data-action="logout">Log Out</a> | Mode data: <strong>${mode}</strong>`
+        ? `<a href="#" data-action="profile" title="Profil saya">${app.view.avatarHtml(session.foto, session.nama)}<strong>${esc(session.nama)} (${esc(session.grup)})</strong></a> | <a href="#" data-action="logout">Log Out</a> | Mode data: <strong>${mode}</strong>`
         : `Mode data: <strong>${mode}</strong>`;
     },
 
@@ -108,17 +174,19 @@ const app = {
         <div class="scrim" id="scrim"></div>
         <aside class="sidebar" id="sidebar">
           <section class="panel">
-            <h2 class="panel-head">Menu</h2>
-            <ul class="sidebar-list" id="menuList">
-              ${cfg.menu.map(m => `<li><button type="button" data-key="${m.key}">${app.view.escapeHtml(m.label)}</button></li>`).join('')}
-            </ul>
+            <h2 class="panel-head" id="menuTitle"></h2>
+            <ul class="sidebar-list" id="menuList"></ul>
           </section>
+          <ul class="module-switcher" id="moduleSwitcher">
+            ${cfg.modules.map(m => `<li><button type="button" class="module-btn" data-module="${m.key}" aria-expanded="false">${app.view.escapeHtml(m.label)}</button></li>`).join('')}
+          </ul>
         </aside>`,
       /* Tidak ada <form> di konten: pencarian dibuka lewat drawer. */
       content: () => `
         <main class="main"><section class="panel">
           <h1 class="panel-head" id="pageTitle"></h1>
           <div class="content-body">
+            <div class="cart-message" id="notice" role="status" hidden></div>
             <div class="search-row">
               <button type="button" class="btn" id="searchBtn">Cari / Saring</button>
               <span class="search-summary" id="searchSummary"></span>
@@ -126,6 +194,10 @@ const app = {
               <div class="search-meta"><span id="dataCount"></span></div>
             </div>
             <div class="table-actions">
+              <button type="button" class="btn" id="exportBtn">Ekspor CSV</button>
+              <button type="button" class="btn" id="importBtn">Impor CSV</button>
+              <input type="file" id="csvInput" accept=".csv,text/csv" class="visually-hidden" aria-hidden="true" tabindex="-1">
+              <button type="button" class="btn" id="printBtn">Cetak</button>
               <button type="button" class="btn" id="resetBtn">Muat ulang dari JSON</button>
               <button type="button" class="btn btn-primary" id="addBtn">+ Tambah Data</button>
             </div>
@@ -171,6 +243,19 @@ const app = {
               <button type="button" class="btn btn-danger" id="confirmYes"></button>
             </div>
           </div>
+        </div>
+        <div class="print-overlay" id="printOverlay" role="dialog" aria-modal="true" aria-labelledby="printTitle">
+          <div class="print-modal panel">
+            <div class="print-modal-head no-print">
+              <h2 id="printTitle">Pratinjau Cetak</h2>
+              <button type="button" class="print-modal-close" id="printClose" aria-label="Tutup">&times;</button>
+            </div>
+            <div class="print-modal-body" id="printArea"></div>
+            <div class="print-modal-actions no-print" style="justify-content:flex-end">
+              <button type="button" class="btn" id="printCancel">Batal</button>
+              <button type="button" class="btn btn-primary" id="printGo">Cetak / Simpan PDF</button>
+            </div>
+          </div>
         </div>`,
 
       /* Satu drawer generik untuk semua form; isinya ditentukan DRAWERS[kind]. */
@@ -211,6 +296,12 @@ const app = {
         submit: 'Terapkan',
         aux: () => ({ label: 'Reset', danger: false }),
         body: () => app.view.buildSearchFields()
+      },
+      profile: {
+        title: () => 'Profil Saya',
+        submit: 'Simpan Profil',
+        aux: () => ({ label: 'Hapus Foto', danger: false }),
+        body: d => app.view.buildProfileFields(d)
       }
     },
 
@@ -218,11 +309,20 @@ const app = {
       Object.entries(app.view.LAYERS).forEach(([id, tpl]) => { app.view.$(id).innerHTML = tpl(cfg); });
     },
     renderSession(){ app.view.$('sessionInfo').innerHTML = app.view.sessionHtml(); },
+    renderMenu(){
+      const $ = app.view.$, esc = app.view.escapeHtml, m = app.model, mod = m.moduleOf(m.activeModule);
+      $('menuTitle').textContent = mod.label;
+      $('menuList').innerHTML = mod.items.map(i => `
+        <li><button type="button" data-key="${i.key}" class="${i.key === m.active ? 'active' : ''}"${i.key === m.active ? ' aria-current="page"' : ''}>${esc(i.label)}</button></li>`).join('');
+      document.querySelectorAll('#moduleSwitcher .module-btn')
+        .forEach(b => b.setAttribute('aria-expanded', String(b.dataset.module === m.activeModule)));
+    },
     renderPage(){
       const m = app.model.current(), $ = app.view.$;
       $('pageTitle').textContent = m.label;
       $('sourceLabel').textContent = m.source;
-      document.querySelectorAll('#menuList button').forEach(b => b.classList.toggle('active', b.dataset.key === m.key));
+      app.view.notify('');
+      app.view.renderMenu();
       app.view.renderTable();
     },
     renderTable(){
@@ -237,12 +337,19 @@ const app = {
       $('dataCount').textContent = `Jumlah Data: ${rows.length}`;
       app.view.renderSearchSummary();
     },
+    searchSummaryText(){
+      const { term, field, filters } = app.model, parts = [];
+      if (term.trim()) parts.push(`"${term.trim()}" di ${field ? app.model.label(field) : 'semua kolom'}`);
+      Object.entries(filters).forEach(([k, v]) => { if (v) parts.push(`${app.model.label(k)}: ${v}`); });
+      return parts.length ? `Saringan: ${parts.join(' · ')}` : '';
+    },
     renderSearchSummary(){
-      const { term, field } = app.model, active = Boolean(term.trim());
-      app.view.$('searchSummary').textContent = active
-        ? `Saringan: "${term.trim()}" di ${field ? app.model.label(field) : 'semua kolom'}`
-        : '';
-      app.view.$('clearSearchBtn').hidden = !active;
+      app.view.$('searchSummary').textContent = app.view.searchSummaryText();
+      app.view.$('clearSearchBtn').hidden = !app.model.hasSearch();
+    },
+    notify(msg, kind = 'success'){
+      const n = app.view.$('notice');
+      n.textContent = msg; n.className = `cart-message ${kind}`; n.hidden = !msg;
     },
     buildField(key, value, mode){
       const m = app.model.current(), f = app.model.fieldCfg(key), esc = app.view.escapeHtml;
@@ -250,7 +357,7 @@ const app = {
       const ro = f.readonly || (isPk && (mode === 'edit' || m.auto));
       const attrs = `id="fld_${key}" name="${esc(key)}"${ro ? ' readonly' : ''}${isPk ? ' required' : ''}`;
       const input =
-        type === 'select'   ? `<select id="fld_${key}" name="${esc(key)}">${(f.options || []).map(o =>
+        type === 'select'   ? `<select id="fld_${key}" name="${esc(key)}">${app.model.optionsOf(f).map(o =>
                                  `<option value="${esc(o)}"${String(o) === String(value) ? ' selected' : ''}>${esc(o)}</option>`).join('')}</select>` :
         type === 'textarea' ? `<textarea ${attrs} rows="3">${esc(value)}</textarea>` :
         type === 'number'   ? `<input type="number" step="any" ${attrs} value="${esc(value)}">` :
@@ -258,7 +365,15 @@ const app = {
       return `<div class="field-group"><label for="fld_${key}">${esc(app.model.label(key))}</label>${input}</div>`;
     },
     buildSearchFields(){
-      const esc = app.view.escapeHtml, { term, field } = app.model;
+      const esc = app.view.escapeHtml, { term, field, filters } = app.model;
+      const quick = (app.model.current().filters || []).map(k => `
+        <div class="field-group">
+          <label for="fld_filter_${esc(k)}">${esc(app.model.label(k))}</label>
+          <select id="fld_filter_${esc(k)}" name="filter_${esc(k)}">
+            <option value="">Semua</option>
+            ${app.model.uniqueValues(k).map(v => `<option value="${esc(v)}"${String(v) === filters[k] ? ' selected' : ''}>${esc(v)}</option>`).join('')}
+          </select>
+        </div>`).join('');
       return `
         <div class="field-group">
           <label for="fld_term">Kata kunci</label>
@@ -270,8 +385,53 @@ const app = {
             <option value="">Semua kolom</option>
             ${app.model.columns().map(c => `<option value="${esc(c)}"${c === field ? ' selected' : ''}>${esc(app.model.label(c))}</option>`).join('')}
           </select>
-        </div>`;
+        </div>${quick}`;
     },
+    buildProfileFields(d){
+      const esc = app.view.escapeHtml, s = app.model.session;
+      return `
+        <div class="profile-photo">
+          <div id="profilePhoto">${app.view.avatarHtml(d.foto, s.nama, 'avatar-lg')}</div>
+          <div class="field-group"><label for="fld_foto">Foto</label><input type="file" id="fld_foto" accept="image/*"></div>
+        </div>
+        <div class="field-group"><label for="fld_username">Username</label><input type="text" id="fld_username" value="${esc(s.username)}" readonly></div>
+        <div class="field-group"><label for="fld_grup">Grup</label><input type="text" id="fld_grup" value="${esc(s.grup)}" readonly></div>
+        <div class="field-group"><label for="fld_nama">Nama</label><input type="text" id="fld_nama" name="nama" value="${esc(s.nama)}" required></div>
+        <div class="field-group"><label for="fld_oldPassword">Password lama</label><input type="password" id="fld_oldPassword" name="oldPassword" autocomplete="current-password"></div>
+        <div class="field-group"><label for="fld_newPassword">Password baru (min. 6 karakter)</label><input type="password" id="fld_newPassword" name="newPassword" autocomplete="new-password"></div>
+        <div class="field-group"><label for="fld_confirmPassword">Ulangi password baru</label><input type="password" id="fld_confirmPassword" name="confirmPassword" autocomplete="new-password"></div>`;
+    },
+    renderProfilePhoto(){
+      app.view.$('profilePhoto').innerHTML = app.view.avatarHtml(app.model.drawer.foto, app.model.session.nama, 'avatar-lg');
+    },
+
+    /* ---- Modal cetak: pratinjau statis dari data yang sedang tersaring ---- */
+    buildPrint(){
+      const esc = app.view.escapeHtml, m = app.model.current(), cols = app.model.columns(), rows = app.model.visibleRows();
+      const now = new Date(), summary = app.view.searchSummaryText(), s = app.model.session;
+      return `
+        <div class="print-report-head">
+          <div>
+            <h1>${esc(app.model.cfg.brand)} - Laporan ${esc(m.label)}</h1>
+            <p>Modul: ${esc(app.model.moduleOf(m.module).label)} / ${esc(m.label)}</p>
+            ${summary ? `<p>${esc(summary)}</p>` : ''}
+          </div>
+          <div class="print-report-meta">
+            <p>Dicetak: ${esc(now.toLocaleString('id-ID'))}</p>
+            <p>Oleh: ${esc(s ? `${s.nama} (${s.grup})` : '-')}</p>
+            <p>Total baris: ${rows.length}</p>
+          </div>
+        </div>
+        ${rows.length ? `<table class="print-table">
+          <thead><tr>${cols.map(c => `<th>${esc(app.model.label(c))}</th>`).join('')}</tr></thead>
+          <tbody>${rows.map(({ row }) => `<tr>${cols.map(c => `<td>${esc(row[c])}</td>`).join('')}</tr>`).join('')}</tbody>
+        </table>` : '<p class="print-empty">Tidak ada data untuk dicetak.</p>'}`;
+    },
+    openPrint(){
+      app.view.$('printArea').innerHTML = app.view.buildPrint();
+      app.view.$('printOverlay').classList.add('show');
+    },
+    closePrint(){ app.view.$('printOverlay').classList.remove('show'); },
 
     /* Membuka drawer jenis `kind`; ctx (mode/index/row) disimpan di model.drawer
        supaya controller tahu konteks saat submit/aux. */
@@ -352,7 +512,7 @@ const app = {
       const cfg = app.model.cfg;
       app.model.session = app.services.auth.restore();
       app.view.renderLayers(cfg);
-      await Promise.all(cfg.menu.map(async m => {
+      await Promise.all(app.model.items().map(async m => {
         try { app.model.data[m.key] = await app.services.load(m); }
         catch (err){ console.error(err); app.model.data[m.key] = []; }
       }));
@@ -362,28 +522,34 @@ const app = {
       if (!app.model.session) app.view.showLogin();
     },
     route(){
-      const key = location.hash.slice(1);
-      app.model.active = app.model.menuOf(key) ? key : app.model.cfg.menu[0].key;
-      app.model.resetSearch();   // saringan tidak dibawa antar menu
+      const parts = location.hash.slice(1).split('/'), m = app.model;
+      const item = m.menuOf(parts[1] || parts[0]) || m.items()[0];
+      m.active = item.key;
+      m.activeModule = item.module;
+      m.resetSearch();   // saringan tidak dibawa antar menu
       app.view.renderPage();
     },
 
     /* Handler per jenis drawer (pasangan dari view.DRAWERS). */
     drawerHandlers: {
       row:    { submit: e => app.controller.save(e),        aux: () => app.controller.remove() },
-      search: { submit: e => app.controller.applySearch(e), aux: () => app.controller.clearSearch() }
+      search: { submit: e => app.controller.applySearch(e), aux: () => app.controller.clearSearch() },
+      profile: {
+        submit: e => app.controller.saveProfile(e),
+        aux: () => { app.model.drawer.foto = ''; app.view.renderProfilePhoto(); }
+      }
     },
 
     bind(){
       const $ = app.view.$, c = app.controller;
       window.addEventListener('hashchange', c.route);
-      document.addEventListener('keydown', e => { if (e.key === 'Escape') app.view.closeDrawer(); });
+      document.addEventListener('keydown', e => { if (e.key === 'Escape'){ app.view.closeDrawer(); app.view.closePrint(); } });
       $('menuToggle').addEventListener('click', () => app.view.toggleSidebar(!$('sidebar').classList.contains('open')));
       $('scrim').addEventListener('click', () => app.view.toggleSidebar(false));
       $('menuList').addEventListener('click', e => {
         const b = e.target.closest('button[data-key]');
         if (!b) return;
-        location.hash = '#' + b.dataset.key;
+        location.hash = `#${app.model.menuOf(b.dataset.key).module}/${b.dataset.key}`;
         app.view.toggleSidebar(false);
       });
 
@@ -406,6 +572,20 @@ const app = {
       $('drawerAux').addEventListener('click', () => c.drawerHandlers[app.model.drawer.kind].aux());
       ['drawerCancel', 'drawerClose', 'drawerScrim'].forEach(id => $(id).addEventListener('click', app.view.closeDrawer));
 
+      // Modul, ekspor/impor, cetak, foto profil.
+      $('moduleSwitcher').addEventListener('click', e => {
+        const b = e.target.closest('button[data-module]');
+        if (b) location.hash = `#${b.dataset.module}/${app.model.moduleOf(b.dataset.module).items[0].key}`;
+      });
+      $('exportBtn').addEventListener('click', c.exportCsv);
+      $('importBtn').addEventListener('click', () => $('csvInput').click());
+      $('csvInput').addEventListener('change', c.importCsv);
+      $('printBtn').addEventListener('click', app.view.openPrint);
+      ['printClose', 'printCancel'].forEach(id => $(id).addEventListener('click', app.view.closePrint));
+      $('printGo').addEventListener('click', () => { document.body.classList.add('printing'); window.print(); });
+      window.addEventListener('afterprint', () => document.body.classList.remove('printing'));
+      $('drawerBody').addEventListener('change', c.onDrawerChange);
+
       // Modal login + sesi.
       $('authForm').addEventListener('submit', c.login);
       $('sessionInfo').addEventListener('click', c.onSessionClick);
@@ -420,6 +600,7 @@ const app = {
       const form = new FormData(e.target);
       app.model.term = String(form.get('term') || '');
       app.model.field = String(form.get('field') || '');
+      (app.model.current().filters || []).forEach(k => { app.model.filters[k] = String(form.get(`filter_${k}`) || ''); });
       app.view.renderTable();
       app.view.closeDrawer();
     },
@@ -451,13 +632,67 @@ const app = {
       }
     },
     onSessionClick(e){
-      if (!e.target.closest('a[data-action="logout"]')) return;
+      const link = e.target.closest('a[data-action]');
+      if (!link) return;
       e.preventDefault();
+      if (link.dataset.action === 'profile'){
+        app.view.openDrawer('profile', { foto: app.model.session.foto || '' });
+        return;
+      }
       app.model.session = null;
       app.services.auth.clear();
       app.view.closeDrawer();
       app.view.renderSession();
       app.view.showLogin();
+    },
+
+    /* ---- Profil (drawer): nama, foto, password ---- */
+    async onDrawerChange(e){
+      if (e.target.id !== 'fld_foto' || !e.target.files[0]) return;
+      try {
+        app.model.drawer.foto = await app.services.resizeImage(e.target.files[0], 128);
+        app.view.renderProfilePhoto();
+      } catch (err){ app.view.showFormError('Gambar tidak dapat dibaca.'); }
+    },
+    async saveProfile(e){
+      const f = new FormData(e.target), s = app.model.session, A = app.services.auth;
+      const nama = String(f.get('nama') || '').trim(), oldPw = String(f.get('oldPassword') || '');
+      const newPw = String(f.get('newPassword') || ''), confirmPw = String(f.get('confirmPassword') || '');
+      if (!nama) return app.view.showFormError('Nama wajib diisi.');
+      if (newPw){
+        if (!oldPw) return app.view.showFormError('Isi password lama untuk mengganti password.');
+        if (newPw.length < 6) return app.view.showFormError('Password baru minimal 6 karakter.');
+        if (newPw !== confirmPw) return app.view.showFormError('Konfirmasi password tidak sama.');
+      }
+      try {
+        if (newPw) await A.changePassword(s.username, oldPw, newPw);   // gagal di sini = profil tidak ikut berubah
+        const prof = await A.updateProfile(s.username, { nama, foto: app.model.drawer.foto });
+        app.model.session = { ...s, nama: prof.nama, foto: prof.foto };
+        A.persist(app.model.session);
+        app.view.renderSession();
+        app.view.closeDrawer();
+        app.view.notify(newPw ? 'Profil dan password diperbarui.' : 'Profil diperbarui.');
+      } catch (err){ app.view.showFormError(err.message); }
+    },
+
+    /* ---- Ekspor / impor CSV (mengikuti data yang sedang tersaring) ---- */
+    exportCsv(){
+      const rows = app.model.visibleRows().map(r => r.row);
+      if (!rows.length) return app.view.notify('Tidak ada data untuk diekspor.', 'error');
+      app.services.download(`${app.model.active}-${new Date().toISOString().slice(0, 10)}.csv`, app.model.toCsv(app.model.columns(), rows));
+      app.view.notify(`${rows.length} baris diekspor.`);
+    },
+    async importCsv(e){
+      const file = e.target.files[0];
+      if (!file) return;
+      try {
+        const incoming = app.model.fromCsv((await file.text()).replace(/^\uFEFF/, ''));
+        if (!incoming.length) throw new Error('File CSV kosong atau formatnya tidak dikenali.');
+        const { rows, added, updated, skipped } = app.model.mergeImport(incoming);
+        await app.controller.commit(rows);
+        app.view.notify(`Impor selesai: ${added} baru, ${updated} diperbarui${skipped ? `, ${skipped} dilewati (kunci kosong)` : ''}.`);
+      } catch (err){ app.view.notify(err.message, 'error'); }
+      finally { e.target.value = ''; }   // file yang sama bisa dipilih ulang
     },
 
     /* ---- CRUD (drawer) ---- */
@@ -547,12 +782,25 @@ const app = {
            username + "123", dan akun harus berstatus aktif. Di mode online
            verifikasi (hash, sesi) sepenuhnya dilakukan server. */
         async login(username, password){
-          const a = app.model.cfg.auth;
+          const a = app.model.cfg.auth, A = app.services.auth;
           const user = (app.model.data[a.source] || []).find(r => String(r[a.usernameKey]).toLowerCase() === username);
-          if (!user || user[a.statusKey] !== a.activeValue || password !== `${username}123`){
+          if (!user || user[a.statusKey] !== a.activeValue || !(await A.verifyOffline(username, password))){
             throw new Error('Username atau password salah.');
           }
-          return { username, nama: user[a.nameKey], grup: user[a.groupKey] };
+          const prof = A.loadProfile(username);
+          return { username, nama: prof.nama || user[a.nameKey], grup: user[a.groupKey], foto: prof.foto || '' };
+        },
+        async updateProfile(username, patch){
+          const A = app.services.auth, prof = { ...A.loadProfile(username), ...patch };
+          try { localStorage.setItem(A.profileKey(username), JSON.stringify(prof)); }
+          catch (err){ throw new Error('Gagal menyimpan profil (penyimpanan penuh?).'); }
+          return prof;
+        },
+        async changePassword(username, oldPw, newPw){
+          const A = app.services.auth;
+          if (!(await A.verifyOffline(username, oldPw))) throw new Error('Password lama salah.');
+          try { localStorage.setItem(A.credKey(username), await A.hash(username, newPw)); }
+          catch (err){ throw new Error('Gagal menyimpan password.'); }
         }
       },
       online: {
@@ -561,7 +809,11 @@ const app = {
                  { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(rows) }),
         reset: async () => {},
         login: (username, password) => app.services.getJson(`${app.model.cfg.apiBase}/auth/login`,
-                 { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, password }) })
+                 { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, password }) }),
+        updateProfile: (username, patch) => app.services.getJson(`${app.model.cfg.apiBase}/auth/profile`,
+                 { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, ...patch }) }),
+        changePassword: (username, oldPw, newPw) => app.services.getJson(`${app.model.cfg.apiBase}/auth/password`,
+                 { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, oldPassword: oldPw, newPassword: newPw }) })
       }
     },
     gateway(){ return app.services.adapters[app.model.cfg.mode]; },
@@ -569,10 +821,44 @@ const app = {
     save(key, rows){ return app.services.gateway().save(key, rows); },
     reset(key){ return app.services.gateway().reset(key); },
 
+    /* Unduh teks sebagai file (BOM UTF-8 agar Excel membaca huruf non-ASCII). */
+    download(filename, text){
+      const url = URL.createObjectURL(new Blob(['\uFEFF' + text], { type: 'text/csv;charset=utf-8;' }));
+      const a = Object.assign(document.createElement('a'), { href: url, download: filename });
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+    },
+    /* Potong persegi di tengah lalu perkecil -> data URL JPEG kecil untuk foto profil. */
+    async resizeImage(file, size){
+      const bmp = await createImageBitmap(file), side = Math.min(bmp.width, bmp.height);
+      const canvas = Object.assign(document.createElement('canvas'), { width: size, height: size });
+      canvas.getContext('2d').drawImage(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side, 0, 0, size, size);
+      return canvas.toDataURL('image/jpeg', 0.8);
+    },
+
     /* Sesi login: hanya profil non-rahasia yang disimpan di localStorage. */
     auth: {
       key: () => app.model.cfg.auth.sessionKey,
       login: (username, password) => app.services.gateway().login(username, password),
+      updateProfile: (username, patch) => app.services.gateway().updateProfile(username, patch),
+      changePassword: (username, oldPw, newPw) => app.services.gateway().changePassword(username, oldPw, newPw),
+
+      /* Penyimpanan kredensial/profil khusus mode offline (demo). Password hanya
+         disimpan sebagai hash SHA-256 ber-garam username, bukan teks asli. */
+      credKey: u => `${app.model.cfg.auth.sessionKey}:cred:${u}`,
+      profileKey: u => `${app.model.cfg.auth.sessionKey}:profile:${u}`,
+      loadProfile(u){
+        try { return JSON.parse(localStorage.getItem(app.services.auth.profileKey(u))) || {}; } catch (err){ return {}; }
+      },
+      async hash(u, pw){
+        const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${u}:${pw}`));
+        return Array.from(new Uint8Array(buf), b => b.toString(16).padStart(2, '0')).join('');
+      },
+      /* Belum pernah ganti password -> aturan demo (username + "123"). */
+      async verifyOffline(u, pw){
+        const A = app.services.auth, stored = localStorage.getItem(A.credKey(u));
+        return stored ? stored === await A.hash(u, pw) : pw === `${u}123`;
+      },
       restore(){
         try { return JSON.parse(localStorage.getItem(app.services.auth.key())); } catch (err){ return null; }
       },

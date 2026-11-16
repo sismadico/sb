@@ -39,16 +39,43 @@ window.APP_CONFIG = {
           usernameKey: 'username', nameKey: 'nama', groupKey: 'grup',
           statusKey: 'status', activeValue: 'aktif' },
   dbName: 'uji-prinsip-db',
-  menu: [
-    { key: 'users', label: 'Users', source: 'users.json', pk: 'id', auto: true,
-      fields: {
-        grup:   { type: 'select', options: ['SA', 'ADMIN', 'GUDANG', 'POS'] },
-        status: { type: 'select', options: ['aktif', 'nonaktif'] }
-      } },
-    { key: 'barang', label: 'Barang', source: 'barang.json', pk: 'kode',
-      fields: {
-        kategori: { type: 'select', options: ['Sembako', 'Rumah Tangga', 'Minuman'] }
-      } }
+  /* Grup modul -> item menu. Menambah menu = menambah satu objek `items`.
+     fields.options: array statis, atau { ref: item, key: kolom } untuk
+     mengambil pilihan dari dataset lain (relasi).
+     filters: kolom yang muncul sebagai saringan cepat di drawer pencarian. */
+  modules: [
+    { key: 'master', label: 'Master', items: [
+      { key: 'users', label: 'Users', source: 'users.json', pk: 'id', auto: true,
+        fields: { grup: { type: 'select', options: { ref: 'akses', key: 'kode' } },
+                  status: { type: 'select', options: ['aktif', 'nonaktif'] } } },
+      { key: 'setting', label: 'Setting', source: 'setting.json', pk: 'kode' },
+      { key: 'akses', label: 'Akses', source: 'akses.json', pk: 'kode' }
+    ] },
+    { key: 'inventory', label: 'Inventory', items: [
+      { key: 'barang', label: 'Barang', source: 'barang.json', pk: 'kode',
+        fields: { kategori: { type: 'select', options: ['Sembako', 'Rumah Tangga', 'Minuman'] } } },
+      { key: 'distribusi', label: 'Distribusi', source: 'distribusi.json', pk: 'id', auto: true,
+        fields: { kode: { type: 'select', options: { ref: 'barang', key: 'kode' } },
+                  dari: { type: 'select', options: { ref: 'lokasi', key: 'nama' } },
+                  ke:   { type: 'select', options: { ref: 'lokasi', key: 'nama' } } } },
+      { key: 'lokasi', label: 'Lokasi', source: 'lokasi.json', pk: 'kode', filters: ['jenis'],
+        fields: { jenis: { type: 'select', options: ['Gudang', 'Toko'] } } }
+    ] },
+    { key: 'pos', label: 'POS', items: [
+      { key: 'transaksi', label: 'Transaksi', source: 'transaksi.json', pk: 'invoice', filters: ['jenis', 'status'],
+        fields: { jenis: { type: 'select', options: ['Jual', 'Beli'] },
+                  kontak: { type: 'select', options: { ref: 'kontak', key: 'nama' } },
+                  status: { type: 'select', options: ['Draft', 'Selesai', 'Batal'] } } },
+      { key: 'kontak', label: 'Kontak', source: 'kontak.json', pk: 'kode', filters: ['jenis'],
+        fields: { jenis: { type: 'select', options: ['Vendor', 'Customer'] } } }
+    ] },
+    { key: 'finance', label: 'Finance', items: [
+      { key: 'akun', label: 'Akun', source: 'akun.json', pk: 'kode', filters: ['tipe'],
+        fields: { tipe: { type: 'select', options: ['Aset', 'Kewajiban', 'Modal', 'Pendapatan', 'Beban'] } } },
+      { key: 'jurnal', label: 'Jurnal', source: 'jurnal.json', pk: 'id', auto: true,
+        fields: { akun: { type: 'select', options: { ref: 'akun', key: 'nama' } } } },
+      { key: 'laporan', label: 'Laporan', source: 'laporan.json', pk: 'periode' }
+    ] }
   ]
 };
 </script>

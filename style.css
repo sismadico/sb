@@ -733,3 +733,21 @@ tbody tr[data-index]:hover{ background:var(--blue-50); }
 /* ---- Pencarian via drawer: ringkasan saringan aktif di konten ---- */
 .search-summary{ font-size:13px; color:var(--ink-soft); }
 .search-row .btn[hidden]{ display:none; }
+
+/* ---- Avatar & profil ---- */
+.avatar{
+  display:inline-flex; align-items:center; justify-content:center; vertical-align:middle;
+  width:28px; height:28px; margin-right:var(--gap-sm); border-radius:50%; object-fit:cover;
+  background:linear-gradient(var(--blue-300),var(--blue-600)); color:var(--white); font-weight:700;
+}
+.avatar-lg{ width:96px; height:96px; margin:0; font-size:36px; }
+.profile-photo{ display:flex; align-items:flex-end; gap:var(--gap-md); }
+.profile-photo .field-group{ flex:1; min-width:0; }
+.table-actions{ flex-wrap:wrap; }
+
+/* ---- Cetak: hanya aktif saat tombol Cetak di modal ditekan (body.printing),
+   supaya Ctrl+P biasa tetap mencetak halaman normal ---- */
+@media print{
+  body:not(.printing) *{ visibility:visible; }
+  body:not(.printing) #printOverlay{ display:none !important; }
+}

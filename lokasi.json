@@ -1,0 +1,14 @@
+[
+ {
+  "kode": "LOK-001",
+  "nama": "Gudang Utama",
+  "jenis": "Gudang",
+  "alamat": "Jakarta"
+ },
+ {
+  "kode": "LOK-002",
+  "nama": "Toko Pusat",
+  "jenis": "Toko",
+  "alamat": "Jakarta"
+ }
+]

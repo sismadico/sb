@@ -1,0 +1,32 @@
+[
+ {
+  "kode": "SA",
+  "nama": "Super Admin",
+  "modul": "master, inventory, pos, finance",
+  "keterangan": "Akses penuh"
+ },
+ {
+  "kode": "ADMIN",
+  "nama": "Admin",
+  "modul": "master, inventory, pos",
+  "keterangan": ""
+ },
+ {
+  "kode": "GUDANG",
+  "nama": "Gudang",
+  "modul": "inventory",
+  "keterangan": ""
+ },
+ {
+  "kode": "POS",
+  "nama": "Kasir",
+  "modul": "pos",
+  "keterangan": ""
+ },
+ {
+  "kode": "FINANCE",
+  "nama": "Finance",
+  "modul": "finance",
+  "keterangan": ""
+ }
+]

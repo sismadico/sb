@@ -1,0 +1,20 @@
+[
+ {
+  "id": 1,
+  "tanggal": "2026-11-10",
+  "kode": "BRG-001",
+  "banyak": 10,
+  "dari": "Gudang Utama",
+  "ke": "Toko Pusat",
+  "keterangan": "Restock toko"
+ },
+ {
+  "id": 2,
+  "tanggal": "2026-11-12",
+  "kode": "BRG-003",
+  "banyak": 20,
+  "dari": "Gudang Utama",
+  "ke": "Toko Pusat",
+  "keterangan": ""
+ }
+]

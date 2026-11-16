@@ -1,0 +1,20 @@
+[
+ {
+  "kode": "NAMA_TOKO",
+  "nama": "Nama Toko",
+  "nilai": "Toko Uji Prinsip",
+  "keterangan": "Tampil di cetakan"
+ },
+ {
+  "kode": "MATA_UANG",
+  "nama": "Mata Uang",
+  "nilai": "IDR",
+  "keterangan": ""
+ },
+ {
+  "kode": "PPN",
+  "nama": "PPN (%)",
+  "nilai": "11",
+  "keterangan": "Tarif pajak penjualan"
+ }
+]
