@@ -2,6 +2,12 @@
    Uji prinsip -- app = { model, view, controller, services }
    Config dibaca dari index.html (window.APP_CONFIG).
    Tabel & form dirender otomatis dari struktur JSON dataset.
+
+   Aturan UI:
+   - SEMUA form (tambah/ubah data, pencarian) tampil di DRAWER,
+     bukan di area konten. Konten hanya berisi tombol & tabel.
+   - Login tampil di MODAL (overlay tengah layar) dengan captcha
+     penjumlahan yang dibuat lokal tanpa pustaka/layanan eksternal.
    ============================================================= */
 const app = {
 
@@ -10,8 +16,11 @@ const app = {
     cfg: window.APP_CONFIG,
     data: {},          // key -> rows[]
     active: null,      // key menu aktif
-    term: '',          // kata kunci pencarian
-    editing: null,     // { mode: 'create' | 'edit', index }
+    term: '',          // kata kunci pencarian (diisi lewat drawer pencarian)
+    field: '',         // kolom pencarian; '' = semua kolom
+    drawer: null,      // { kind: 'row' | 'search', mode?, index?, row? }
+    session: null,     // { username, nama, grup } | null
+    captcha: { a: 0, b: 0 },
 
     menuOf(key){ return app.model.cfg.menu.find(m => m.key === key); },
     current(){ return app.model.menuOf(app.model.active); },
@@ -34,11 +43,12 @@ const app = {
       return vals.some(v => String(v).length > 60) ? 'textarea' : 'text';
     },
     visibleRows(){
-      const t = app.model.term.trim().toLowerCase();
+      const { term, field } = app.model, t = term.trim().toLowerCase();
       return app.model.rows()
         .map((row, index) => ({ row, index }))
-        .filter(({ row }) => !t || Object.values(row).some(v => String(v).toLowerCase().includes(t)));
+        .filter(({ row }) => !t || (field ? [row[field]] : Object.values(row)).some(v => String(v ?? '').toLowerCase().includes(t)));
     },
+    resetSearch(){ app.model.term = ''; app.model.field = ''; },
     nextId(){
       return Math.max(0, ...app.model.rows().map(r => Number(r[app.model.current().pk]) || 0)) + 1;
     },
@@ -56,6 +66,18 @@ const app = {
       if (row[pk] === '' || row[pk] == null) return `${app.model.label(pk)} wajib diisi.`;
       const dup = app.model.rows().some((r, i) => i !== index && String(r[pk]) === String(row[pk]));
       return dup ? `${app.model.label(pk)} "${row[pk]}" sudah ada.` : '';
+    },
+
+    /* Captcha penjumlahan 1-20, murni lokal (Web Crypto bawaan browser,
+       tanpa dependensi). Soal baru dibuat tiap modal login dibuka dan
+       tiap percobaan gagal, supaya jawaban lama tidak bisa dipakai ulang. */
+    newCaptcha(){
+      const [a, b] = crypto.getRandomValues(new Uint8Array(2));
+      app.model.captcha = { a: (a % 20) + 1, b: (b % 20) + 1 };
+    },
+    checkCaptcha(answer){
+      const { a, b } = app.model.captcha;
+      return Number(answer) === a + b;
     }
   },
 
@@ -63,6 +85,14 @@ const app = {
   view: {
     escapeHtml(v){
       return String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    },
+    $: id => document.getElementById(id),
+
+    sessionHtml(){
+      const esc = app.view.escapeHtml, { session } = app.model, mode = esc(app.model.cfg.mode);
+      return session
+        ? `Selamat datang <strong>${esc(session.nama)} (${esc(session.grup)})</strong> | <a href="#" data-action="logout">Log Out</a> | Mode data: <strong>${mode}</strong>`
+        : `Mode data: <strong>${mode}</strong>`;
     },
 
     LAYERS: {
@@ -72,7 +102,7 @@ const app = {
             <button class="menu-toggle" id="menuToggle" aria-label="Buka menu" aria-controls="sidebar">&#9776;</button>
             <div class="brand"><span class="brand-mark" aria-hidden="true"></span><span class="brand-name">${app.view.escapeHtml(cfg.brand)}</span></div>
           </div>
-          <div class="session">Mode data: <strong>${app.view.escapeHtml(cfg.mode)}</strong></div>
+          <div class="session" id="sessionInfo">${app.view.sessionHtml()}</div>
         </div></header>`,
       menu: cfg => `
         <div class="scrim" id="scrim"></div>
@@ -84,15 +114,17 @@ const app = {
             </ul>
           </section>
         </aside>`,
+      /* Tidak ada <form> di konten: pencarian dibuka lewat drawer. */
       content: () => `
         <main class="main"><section class="panel">
           <h1 class="panel-head" id="pageTitle"></h1>
           <div class="content-body">
-            <form class="search-row" id="searchForm">
-              <label for="searchInput">Cari</label>
-              <input type="text" id="searchInput" aria-label="Kata kunci pencarian" autocomplete="off">
+            <div class="search-row">
+              <button type="button" class="btn" id="searchBtn">Cari / Saring</button>
+              <span class="search-summary" id="searchSummary"></span>
+              <button type="button" class="btn" id="clearSearchBtn" hidden>Hapus Saringan</button>
               <div class="search-meta"><span id="dataCount"></span></div>
-            </form>
+            </div>
             <div class="table-actions">
               <button type="button" class="btn" id="resetBtn">Muat ulang dari JSON</button>
               <button type="button" class="btn btn-primary" id="addBtn">+ Tambah Data</button>
@@ -105,7 +137,31 @@ const app = {
         </section></main>`,
       footer: cfg => `
         <footer class="footer"><p>${app.view.escapeHtml(cfg.brand)}: config di index.html, tabel dan form dirender dari JSON. Sumber data: <strong id="sourceLabel"></strong></p></footer>`,
-      modal: () => `
+
+      /* Modal: login (gerbang, tidak bisa ditutup tanpa berhasil) + konfirmasi. */
+      modal: cfg => `
+        <div class="auth-overlay" id="authOverlay" hidden role="dialog" aria-modal="true" aria-labelledby="authTitle">
+          <div class="auth-card panel">
+            <h2 class="panel-head" id="authTitle">Masuk ke ${app.view.escapeHtml(cfg.brand)}</h2>
+            <form class="auth-form" id="authForm" autocomplete="off">
+              <div class="field-group">
+                <label for="authUsername">Username</label>
+                <input type="text" id="authUsername" name="username" autocomplete="username" required>
+              </div>
+              <div class="field-group">
+                <label for="authPassword">Password</label>
+                <input type="password" id="authPassword" name="password" autocomplete="current-password" required>
+              </div>
+              <div class="field-group">
+                <label for="authCaptcha" id="authCaptchaLabel"></label>
+                <input type="number" id="authCaptcha" name="captcha" required>
+              </div>
+              <p class="auth-error" id="authError" role="alert" hidden></p>
+              <button type="submit" class="btn btn-primary auth-submit">Masuk</button>
+            </form>
+            ${cfg.mode === 'offline' ? '<p class="auth-hint">Demo (mode offline): <strong>wawan</strong> / wawan123</p>' : ''}
+          </div>
+        </div>
         <div class="auth-overlay" id="confirmOverlay" hidden role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
           <div class="auth-card panel">
             <h2 class="panel-head" id="confirmTitle"></h2>
@@ -116,6 +172,8 @@ const app = {
             </div>
           </div>
         </div>`,
+
+      /* Satu drawer generik untuk semua form; isinya ditentukan DRAWERS[kind]. */
       drawer: () => `
         <div class="drawer-scrim" id="drawerScrim"></div>
         <aside class="drawer" id="drawer" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="drawerTitle">
@@ -127,35 +185,64 @@ const app = {
             <div class="drawer-body" id="drawerBody"></div>
             <p class="auth-error" id="formError" hidden></p>
             <div class="drawer-actions">
-              <button type="button" class="btn btn-danger" id="drawerDelete">Hapus</button>
+              <button type="button" class="btn" id="drawerAux"></button>
               <button type="button" class="btn" id="drawerCancel">Batal</button>
-              <button type="submit" class="btn btn-primary">Simpan</button>
+              <button type="submit" class="btn btn-primary" id="drawerSubmit">Simpan</button>
             </div>
           </form>
         </aside>`
     },
 
-    renderLayers(cfg){
-      Object.entries(app.view.LAYERS).forEach(([id, tpl]) => { document.getElementById(id).innerHTML = tpl(cfg); });
+    /* Registri jenis drawer: menambah form baru = menambah satu entri di sini
+       (+ handler-nya di controller.drawerHandlers), tanpa percabangan if. */
+    DRAWERS: {
+      row: {
+        title: (m, d) => `${m.label} - ${d.mode === 'create' ? 'Tambah Data' : 'Ubah Data'}`,
+        submit: 'Simpan',
+        aux: d => d.mode === 'edit' ? { label: 'Hapus', danger: true } : null,
+        body: d => {
+          const m = app.model.current();
+          const seed = d.mode === 'create' && m.auto ? { ...d.row, [m.pk]: app.model.nextId() } : d.row;
+          return app.model.columns().map(k => app.view.buildField(k, seed[k], d.mode)).join('');
+        }
+      },
+      search: {
+        title: m => `${m.label} - Cari / Saring`,
+        submit: 'Terapkan',
+        aux: () => ({ label: 'Reset', danger: false }),
+        body: () => app.view.buildSearchFields()
+      }
     },
+
+    renderLayers(cfg){
+      Object.entries(app.view.LAYERS).forEach(([id, tpl]) => { app.view.$(id).innerHTML = tpl(cfg); });
+    },
+    renderSession(){ app.view.$('sessionInfo').innerHTML = app.view.sessionHtml(); },
     renderPage(){
-      const m = app.model.current();
-      document.getElementById('pageTitle').textContent = m.label;
-      document.getElementById('sourceLabel').textContent = m.source;
-      document.getElementById('searchInput').value = '';
+      const m = app.model.current(), $ = app.view.$;
+      $('pageTitle').textContent = m.label;
+      $('sourceLabel').textContent = m.source;
       document.querySelectorAll('#menuList button').forEach(b => b.classList.toggle('active', b.dataset.key === m.key));
       app.view.renderTable();
     },
     renderTable(){
-      const cols = app.model.columns(), rows = app.model.visibleRows(), esc = app.view.escapeHtml;
-      document.getElementById('tableHead').innerHTML = cols.map(c => `<th>${esc(app.model.label(c))}</th>`).join('');
-      document.getElementById('tableBody').innerHTML = rows.length
+      const cols = app.model.columns(), rows = app.model.visibleRows(), esc = app.view.escapeHtml, $ = app.view.$;
+      $('tableHead').innerHTML = cols.map(c => `<th>${esc(app.model.label(c))}</th>`).join('');
+      $('tableBody').innerHTML = rows.length
         ? rows.map(({ row, index }) => `
             <tr data-index="${index}" tabindex="0">
               ${cols.map(c => `<td data-label="${esc(app.model.label(c))}">${esc(row[c])}</td>`).join('')}
             </tr>`).join('')
         : `<tr class="empty-row"><td colspan="${cols.length || 1}">Tidak ada data.</td></tr>`;
-      document.getElementById('dataCount').textContent = `Jumlah Data: ${rows.length}`;
+      $('dataCount').textContent = `Jumlah Data: ${rows.length}`;
+      app.view.renderSearchSummary();
+    },
+    renderSearchSummary(){
+      const { term, field } = app.model, active = Boolean(term.trim());
+      app.view.$('searchSummary').textContent = active
+        ? `Saringan: "${term.trim()}" di ${field ? app.model.label(field) : 'semua kolom'}`
+        : '';
+      app.view.$('clearSearchBtn').hidden = !active;
     },
     buildField(key, value, mode){
       const m = app.model.current(), f = app.model.fieldCfg(key), esc = app.view.escapeHtml;
@@ -170,43 +257,92 @@ const app = {
                               `<input type="text" ${attrs} value="${esc(value)}">`;
       return `<div class="field-group"><label for="fld_${key}">${esc(app.model.label(key))}</label>${input}</div>`;
     },
-    openDrawer(mode, row = {}){
-      const m = app.model.current();
-      const seed = mode === 'create' && m.auto ? { ...row, [m.pk]: app.model.nextId() } : row;
-      document.getElementById('drawerTitle').textContent = `${m.label} - ${mode === 'create' ? 'Tambah Data' : 'Ubah Data'}`;
-      document.getElementById('drawerBody').innerHTML = app.model.columns().map(k => app.view.buildField(k, seed[k], mode)).join('');
-      document.getElementById('drawerDelete').style.display = mode === 'create' ? 'none' : '';
+    buildSearchFields(){
+      const esc = app.view.escapeHtml, { term, field } = app.model;
+      return `
+        <div class="field-group">
+          <label for="fld_term">Kata kunci</label>
+          <input type="text" id="fld_term" name="term" value="${esc(term)}" autocomplete="off">
+        </div>
+        <div class="field-group">
+          <label for="fld_field">Cari di kolom</label>
+          <select id="fld_field" name="field">
+            <option value="">Semua kolom</option>
+            ${app.model.columns().map(c => `<option value="${esc(c)}"${c === field ? ' selected' : ''}>${esc(app.model.label(c))}</option>`).join('')}
+          </select>
+        </div>`;
+    },
+
+    /* Membuka drawer jenis `kind`; ctx (mode/index/row) disimpan di model.drawer
+       supaya controller tahu konteks saat submit/aux. */
+    openDrawer(kind, ctx = {}){
+      const spec = app.view.DRAWERS[kind], $ = app.view.$;
+      const d = app.model.drawer = { kind, ...ctx };
+      const aux = spec.aux(d);
+
+      $('drawerTitle').textContent = spec.title(app.model.current(), d);
+      $('drawerBody').innerHTML = spec.body(d);
+      $('drawerSubmit').textContent = spec.submit;
+      $('drawerAux').style.display = aux ? '' : 'none';
+      if (aux){
+        $('drawerAux').textContent = aux.label;
+        $('drawerAux').classList.toggle('btn-danger', Boolean(aux.danger));
+      }
       app.view.showFormError('');
-      document.getElementById('drawer').classList.add('open');
-      document.getElementById('drawer').setAttribute('aria-hidden', 'false');
-      document.getElementById('drawerScrim').classList.add('show');
+      $('drawer').classList.add('open');
+      $('drawer').setAttribute('aria-hidden', 'false');
+      $('drawerScrim').classList.add('show');
       const first = document.querySelector('#drawerBody input:not([readonly]), #drawerBody select, #drawerBody textarea');
       if (first) first.focus();
     },
     closeDrawer(){
-      document.getElementById('drawer').classList.remove('open');
-      document.getElementById('drawer').setAttribute('aria-hidden', 'true');
-      document.getElementById('drawerScrim').classList.remove('show');
+      const $ = app.view.$;
+      $('drawer').classList.remove('open');
+      $('drawer').setAttribute('aria-hidden', 'true');
+      $('drawerScrim').classList.remove('show');
     },
     showFormError(msg){
-      const p = document.getElementById('formError');
+      const p = app.view.$('formError');
       p.textContent = msg; p.hidden = !msg;
     },
+
+    /* ---- Modal login ---- */
+    refreshCaptcha(){
+      app.model.newCaptcha();
+      const { a, b } = app.model.captcha, $ = app.view.$;
+      $('authCaptchaLabel').textContent = `Berapa hasil ${a} + ${b} ?`;
+      $('authCaptcha').value = '';
+    },
+    showAuthError(msg){
+      const p = app.view.$('authError');
+      p.textContent = msg; p.hidden = !msg;
+    },
+    showLogin(){
+      const $ = app.view.$;
+      $('authUsername').value = '';
+      $('authPassword').value = '';
+      app.view.showAuthError('');
+      app.view.refreshCaptcha();
+      $('authOverlay').hidden = false;
+      $('authUsername').focus();
+    },
+    hideLogin(){ app.view.$('authOverlay').hidden = true; },
+
     confirm({ title, text, yes }){
       return new Promise(resolve => {
-        const o = document.getElementById('confirmOverlay');
-        document.getElementById('confirmTitle').textContent = title;
-        document.getElementById('confirmText').textContent = text;
-        document.getElementById('confirmYes').textContent = yes;
+        const o = app.view.$('confirmOverlay'), $ = app.view.$;
+        $('confirmTitle').textContent = title;
+        $('confirmText').textContent = text;
+        $('confirmYes').textContent = yes;
         const done = v => { o.hidden = true; resolve(v); };
-        document.getElementById('confirmYes').onclick = () => done(true);
-        document.getElementById('confirmNo').onclick = () => done(false);
+        $('confirmYes').onclick = () => done(true);
+        $('confirmNo').onclick = () => done(false);
         o.hidden = false;
       });
     },
     toggleSidebar(open){
-      document.getElementById('sidebar').classList.toggle('open', open);
-      document.getElementById('scrim').classList.toggle('show', open);
+      app.view.$('sidebar').classList.toggle('open', open);
+      app.view.$('scrim').classList.toggle('show', open);
     }
   },
 
@@ -214,6 +350,7 @@ const app = {
   controller: {
     async init(){
       const cfg = app.model.cfg;
+      app.model.session = app.services.auth.restore();
       app.view.renderLayers(cfg);
       await Promise.all(cfg.menu.map(async m => {
         try { app.model.data[m.key] = await app.services.load(m); }
@@ -221,14 +358,24 @@ const app = {
       }));
       app.controller.bind();
       app.controller.route();
+      /* Gerbang login: tanpa sesi tersimpan, modal login tampil dulu. */
+      if (!app.model.session) app.view.showLogin();
     },
     route(){
       const key = location.hash.slice(1);
       app.model.active = app.model.menuOf(key) ? key : app.model.cfg.menu[0].key;
+      app.model.resetSearch();   // saringan tidak dibawa antar menu
       app.view.renderPage();
     },
+
+    /* Handler per jenis drawer (pasangan dari view.DRAWERS). */
+    drawerHandlers: {
+      row:    { submit: e => app.controller.save(e),        aux: () => app.controller.remove() },
+      search: { submit: e => app.controller.applySearch(e), aux: () => app.controller.clearSearch() }
+    },
+
     bind(){
-      const $ = id => document.getElementById(id), c = app.controller;
+      const $ = app.view.$, c = app.controller;
       window.addEventListener('hashchange', c.route);
       document.addEventListener('keydown', e => { if (e.key === 'Escape') app.view.closeDrawer(); });
       $('menuToggle').addEventListener('click', () => app.view.toggleSidebar(!$('sidebar').classList.contains('open')));
@@ -239,31 +386,88 @@ const app = {
         location.hash = '#' + b.dataset.key;
         app.view.toggleSidebar(false);
       });
-      $('searchForm').addEventListener('submit', e => e.preventDefault());
-      $('searchInput').addEventListener('input', e => { app.model.term = e.target.value; app.view.renderTable(); });
-      $('addBtn').addEventListener('click', () => { app.model.editing = { mode: 'create' }; app.view.openDrawer('create'); });
+
+      // Konten: semua tombol membuka drawer, tidak ada form inline.
+      $('searchBtn').addEventListener('click', () => app.view.openDrawer('search'));
+      $('clearSearchBtn').addEventListener('click', c.clearSearch);
+      $('addBtn').addEventListener('click', () => app.view.openDrawer('row', { mode: 'create', row: {} }));
       $('resetBtn').addEventListener('click', c.reset);
       const open = e => {
         const tr = e.target.closest('tr[data-index]');
         if (!tr || (e.type === 'keydown' && e.key !== 'Enter')) return;
         const index = Number(tr.dataset.index);
-        app.model.editing = { mode: 'edit', index };
-        app.view.openDrawer('edit', app.model.rows()[index]);
+        app.view.openDrawer('row', { mode: 'edit', index, row: app.model.rows()[index] });
       };
       $('tableBody').addEventListener('click', open);
       $('tableBody').addEventListener('keydown', open);
-      $('drawerForm').addEventListener('submit', c.save);
-      $('drawerDelete').addEventListener('click', c.remove);
+
+      // Drawer generik: submit & aksi tambahan didelegasikan per jenis.
+      $('drawerForm').addEventListener('submit', c.submitDrawer);
+      $('drawerAux').addEventListener('click', () => c.drawerHandlers[app.model.drawer.kind].aux());
       ['drawerCancel', 'drawerClose', 'drawerScrim'].forEach(id => $(id).addEventListener('click', app.view.closeDrawer));
+
+      // Modal login + sesi.
+      $('authForm').addEventListener('submit', c.login);
+      $('sessionInfo').addEventListener('click', c.onSessionClick);
     },
+    submitDrawer(e){
+      e.preventDefault();
+      return app.controller.drawerHandlers[app.model.drawer.kind].submit(e);
+    },
+
+    /* ---- Pencarian (drawer) ---- */
+    applySearch(e){
+      const form = new FormData(e.target);
+      app.model.term = String(form.get('term') || '');
+      app.model.field = String(form.get('field') || '');
+      app.view.renderTable();
+      app.view.closeDrawer();
+    },
+    clearSearch(){
+      app.model.resetSearch();
+      app.view.renderTable();
+      app.view.closeDrawer();
+    },
+
+    /* ---- Auth (modal) ---- */
+    async login(e){
+      e.preventDefault();
+      const $ = app.view.$;
+      if (!app.model.checkCaptcha($('authCaptcha').value)){
+        app.view.showAuthError('Jawaban captcha salah, silakan coba lagi.');
+        app.view.refreshCaptcha();
+        return;
+      }
+      try {
+        const session = await app.services.auth.login($('authUsername').value.trim().toLowerCase(), $('authPassword').value);
+        app.model.session = session;
+        app.services.auth.persist(session);
+        app.view.renderSession();
+        app.view.hideLogin();
+      } catch (err){
+        app.view.showAuthError(err.message);
+        $('authPassword').value = '';
+        app.view.refreshCaptcha();
+      }
+    },
+    onSessionClick(e){
+      if (!e.target.closest('a[data-action="logout"]')) return;
+      e.preventDefault();
+      app.model.session = null;
+      app.services.auth.clear();
+      app.view.closeDrawer();
+      app.view.renderSession();
+      app.view.showLogin();
+    },
+
+    /* ---- CRUD (drawer) ---- */
     async commit(rows){
       app.model.data[app.model.active] = rows;
       await app.services.save(app.model.active, rows);
       app.view.renderTable();
     },
     async save(e){
-      e.preventDefault();
-      const { mode, index } = app.model.editing, rows = app.model.rows();
+      const { mode, index } = app.model.drawer, rows = app.model.rows();
       let row = app.model.coerce(new FormData(e.target));
       if (mode === 'edit') row = { ...rows[index], ...row };
       const err = app.model.validate(row, mode === 'edit' ? index : -1);
@@ -272,7 +476,7 @@ const app = {
       app.view.closeDrawer();
     },
     async remove(){
-      const { index } = app.model.editing, m = app.model.current();
+      const { index } = app.model.drawer, m = app.model.current();
       const ok = await app.view.confirm({ title: 'Hapus data?', text: `Data ke-${index + 1} pada ${m.label} akan dihapus.`, yes: 'Hapus' });
       if (!ok) return;
       await app.controller.commit(app.model.rows().filter((_, i) => i !== index));
@@ -290,10 +494,11 @@ const app = {
 
   /* ---------- SERVICES: koneksi JSON, IndexedDB, API gateway ---------- */
   services: {
+    /* Mengembalikan array (daftar data) atau objek (mis. sesi login). */
     unwrap(j){
       if (Array.isArray(j)) return j;
       if (j && j.ok === false) throw new Error((j.error && j.error.message) || 'Permintaan gagal');
-      if (j && Array.isArray(j.data)) return j.data;
+      if (j && j.data !== undefined && j.data !== null) return j.data;
       throw new Error('Format JSON tidak dikenali');
     },
     async getJson(url, opt){
@@ -319,7 +524,7 @@ const app = {
       });
     },
 
-    /* Dua adapter dengan antarmuka sama: list / save / reset */
+    /* Dua adapter dengan antarmuka sama: list / save / reset / login */
     adapters: {
       offline: {
         async list(m){
@@ -337,19 +542,47 @@ const app = {
         },
         async reset(key){
           try { await app.services.idb('readwrite', s => s.delete(key)); } catch (err){ /* abaikan */ }
+        },
+        /* DEMO SAJA: password tidak disimpan di data. Aturan demo: password =
+           username + "123", dan akun harus berstatus aktif. Di mode online
+           verifikasi (hash, sesi) sepenuhnya dilakukan server. */
+        async login(username, password){
+          const a = app.model.cfg.auth;
+          const user = (app.model.data[a.source] || []).find(r => String(r[a.usernameKey]).toLowerCase() === username);
+          if (!user || user[a.statusKey] !== a.activeValue || password !== `${username}123`){
+            throw new Error('Username atau password salah.');
+          }
+          return { username, nama: user[a.nameKey], grup: user[a.groupKey] };
         }
       },
       online: {
         list:  m => app.services.getJson(`${app.model.cfg.apiBase}/${m.key}`),
         save:  (key, rows) => app.services.getJson(`${app.model.cfg.apiBase}/${key}`,
                  { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(rows) }),
-        reset: async () => {}
+        reset: async () => {},
+        login: (username, password) => app.services.getJson(`${app.model.cfg.apiBase}/auth/login`,
+                 { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, password }) })
       }
     },
     gateway(){ return app.services.adapters[app.model.cfg.mode]; },
     load(m){ return app.services.gateway().list(m); },
     save(key, rows){ return app.services.gateway().save(key, rows); },
-    reset(key){ return app.services.gateway().reset(key); }
+    reset(key){ return app.services.gateway().reset(key); },
+
+    /* Sesi login: hanya profil non-rahasia yang disimpan di localStorage. */
+    auth: {
+      key: () => app.model.cfg.auth.sessionKey,
+      login: (username, password) => app.services.gateway().login(username, password),
+      restore(){
+        try { return JSON.parse(localStorage.getItem(app.services.auth.key())); } catch (err){ return null; }
+      },
+      persist(session){
+        try { localStorage.setItem(app.services.auth.key(), JSON.stringify(session)); } catch (err){ /* abaikan */ }
+      },
+      clear(){
+        try { localStorage.removeItem(app.services.auth.key()); } catch (err){ /* abaikan */ }
+      }
+    }
   }
 };
 

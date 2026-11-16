@@ -729,3 +729,7 @@ tbody tr[data-row-index]:focus-visible{outline:2px solid var(--blue-800); outlin
 .table-actions{ gap:var(--gap-sm); }
 tbody tr[data-index]{ cursor:pointer; }
 tbody tr[data-index]:hover{ background:var(--blue-50); }
+
+/* ---- Pencarian via drawer: ringkasan saringan aktif di konten ---- */
+.search-summary{ font-size:13px; color:var(--ink-soft); }
+.search-row .btn[hidden]{ display:none; }

@@ -33,6 +33,11 @@ window.APP_CONFIG = {
   brand: 'Uji Prinsip',
   mode: 'offline',
   apiBase: '/api',
+  /* Login: offline memeriksa dataset `source` (tanpa menyimpan password
+     di frontend), online memanggil POST {apiBase}/auth/login. */
+  auth: { sessionKey: 'uji-prinsip-session', source: 'users',
+          usernameKey: 'username', nameKey: 'nama', groupKey: 'grup',
+          statusKey: 'status', activeValue: 'aktif' },
   dbName: 'uji-prinsip-db',
   menu: [
     { key: 'users', label: 'Users', source: 'users.json', pk: 'id', auto: true,
