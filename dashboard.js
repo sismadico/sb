@@ -6,6 +6,21 @@
      transaksi + item_transaksi + stok per lokasi + barang + jurnal + laporan.
    ============================================================= */
 (() => {
+  /* CSS disisipkan dari sini supaya halaman tidak bergantung pada versi style.css yang ter-deploy. */
+  if (!document.getElementById('css-dashboard')) document.head.appendChild(Object.assign(document.createElement('style'), { id: 'css-dashboard', textContent: `
+/* ---- Dashboard terpadu ---- */
+.dash-top{display:flex;gap:14px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;margin-bottom:14px;}
+.dash-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;flex:1;min-width:260px;}
+.kpi{background:var(--white);border:1px solid var(--line);border-radius:4px;padding:10px 12px;display:flex;flex-direction:column;gap:4px;}
+.kpi span{font-size:12px;color:var(--ink-soft);}
+.kpi strong{font-size:17px;color:var(--blue-900);}
+.dash-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:14px;margin-bottom:14px;}
+.dash-card{margin:0;min-width:0;}
+.dash-sub{margin:16px 0 8px;font-size:15px;color:var(--blue-900);}
+.trx-line{display:grid;grid-template-columns:1fr 80px;gap:6px;margin-bottom:6px;}
+.dash-filter{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px;font-size:13px;}
+.dash-note{color:var(--ink-soft);font-size:12px;}
+` }));
   const $ = id => document.getElementById(id), D = k => app.model.data[k] || [];
   const esc = app.view.escapeHtml, fmt = app.view.formatValue, rp = v => 'Rp ' + fmt(v);
   const sum = (rows, f) => rows.reduce((s, r) => s + (Number(f(r)) || 0), 0);

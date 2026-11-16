@@ -6,6 +6,7 @@
   "judul": "Toko Uji Prinsip",
   "isi": "Kelola stok, kasir, dan keuangan toko dalam satu aplikasi terpadu.",
   "ikon": "",
+  "gambar": "",
   "tombol": "Masuk ke Aplikasi",
   "tautan": "masuk",
   "aktif": "ya"
@@ -17,6 +18,7 @@
   "judul": "Stok per Lokasi",
   "isi": "Pantau stok gudang dan toko, lengkap dengan distribusi masuk dan keluar.",
   "ikon": "📦",
+  "gambar": "",
   "tombol": "",
   "tautan": "",
   "aktif": "ya"
@@ -28,6 +30,7 @@
   "judul": "Kasir Cash & QRIS",
   "isi": "Katalog, keranjang belanja, dan pembayaran tunai atau QRIS.",
   "ikon": "🧾",
+  "gambar": "",
   "tombol": "",
   "tautan": "",
   "aktif": "ya"
@@ -39,6 +42,7 @@
   "judul": "Laporan Keuangan",
   "isi": "Setiap transaksi otomatis tercatat di jurnal dan laporan kas.",
   "ikon": "📊",
+  "gambar": "",
   "tombol": "",
   "tautan": "",
   "aktif": "ya"
@@ -50,6 +54,7 @@
   "judul": "Produk Kami",
   "isi": "Barang yang tersedia di toko.",
   "ikon": "",
+  "gambar": "",
   "tombol": "",
   "tautan": "",
   "aktif": "ya"
@@ -61,6 +66,7 @@
   "judul": "Hubungi Kami",
   "isi": "Toko Pusat, Jakarta. Ubah alamat dan nomor kontak di menu Master > Landing.",
   "ikon": "",
+  "gambar": "",
   "tombol": "",
   "tautan": "",
   "aktif": "ya"
@@ -72,6 +78,55 @@
   "judul": "",
   "isi": "© Toko Uji Prinsip",
   "ikon": "",
+  "gambar": "",
+  "tombol": "",
+  "tautan": "",
+  "aktif": "ya"
+ },
+ {
+  "kode": "LP-008",
+  "bagian": "slide",
+  "urutan": 1,
+  "judul": "Stok Gudang & Toko, Selalu Sinkron",
+  "isi": "Distribusi antar lokasi tercatat otomatis.",
+  "ikon": "",
+  "gambar": "img/slide-1.svg",
+  "tombol": "",
+  "tautan": "",
+  "aktif": "ya"
+ },
+ {
+  "kode": "LP-009",
+  "bagian": "slide",
+  "urutan": 2,
+  "judul": "Kasir Cepat: Cash dan QRIS",
+  "isi": "Pilih barang, bayar, stok langsung berkurang.",
+  "ikon": "",
+  "gambar": "img/slide-2.svg",
+  "tombol": "",
+  "tautan": "",
+  "aktif": "ya"
+ },
+ {
+  "kode": "LP-010",
+  "bagian": "slide",
+  "urutan": 3,
+  "judul": "Laporan Keuangan Real-time",
+  "isi": "Jurnal dan laporan kas terisi dari setiap transaksi.",
+  "ikon": "",
+  "gambar": "img/slide-3.svg",
+  "tombol": "",
+  "tautan": "",
+  "aktif": "ya"
+ },
+ {
+  "kode": "LP-011",
+  "bagian": "slide",
+  "urutan": 4,
+  "judul": "Katalog Produk Lengkap",
+  "isi": "Harga dan ketersediaan barang selalu terbaru.",
+  "ikon": "",
+  "gambar": "img/slide-4.svg",
   "tombol": "",
   "tautan": "",
   "aktif": "ya"

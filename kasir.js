@@ -4,6 +4,28 @@
    QRIS: tidak ada verifikasi ke penyedia pembayaran; kasir mengonfirmasi manual.
    ============================================================= */
 (() => {
+  /* CSS disisipkan dari sini supaya halaman tidak bergantung pada versi style.css yang ter-deploy. */
+  if (!document.getElementById('css-kasir')) document.head.appendChild(Object.assign(document.createElement('style'), { id: 'css-kasir', textContent: `
+/* ---- Kasir ---- */
+.kasir-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px;}
+.kasir-bar input[type=search]{flex:1;min-width:160px;padding:7px 10px;border:1px solid var(--line);border-radius:var(--radius-sm,3px);}
+.catalog{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px;}
+.prod{background:var(--white);border:1px solid var(--line);border-radius:6px;padding:12px;display:flex;flex-direction:column;gap:6px;}
+.prod h3{margin:0;font-size:14px;color:var(--blue-900);}
+.prod-meta{margin:0;font-size:12px;color:var(--ink-soft);}
+.prod .btn{margin-top:auto;justify-content:center;}
+.prod .btn:disabled{opacity:.5;cursor:not-allowed;}
+.cart-line{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--blue-100);}
+.cart-qty{display:flex;align-items:center;gap:4px;}
+.cart-qty .btn{padding:4px 10px;}
+.cart-qty span{min-width:24px;text-align:center;}
+.cart-total{display:flex;justify-content:space-between;font-size:16px;margin:12px 0;}
+.pay-opts{display:flex;gap:16px;}
+.pay-opt{display:inline-flex;align-items:center;gap:6px;cursor:pointer;}
+.qris-box{text-align:center;border:1px dashed var(--blue-500);border-radius:6px;padding:12px;margin-top:8px;}
+.qris-box img{max-width:220px;width:100%;}
+.qris-ph{width:180px;height:180px;margin:0 auto;display:flex;align-items:center;justify-content:center;background:var(--blue-100);color:var(--blue-900);border-radius:6px;}
+` }));
   const $ = id => document.getElementById(id), D = k => app.model.data[k] || [], esc = app.view.escapeHtml;
   const K = () => app.model.cfg.kasir || {}, rp = v => app.trx.rp(v), metodes = () => K().pembayaran || ['Cash', 'QRIS'];
   const st = { lokasi: '', q: '', kat: '', cart: {}, kontak: '', metode: '', bayar: '', qrisOk: false };
