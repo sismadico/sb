@@ -9,6 +9,10 @@
   const $ = id => document.getElementById(id), D = k => app.model.data[k] || [];
   const esc = app.view.escapeHtml, fmt = app.view.formatValue, rp = v => 'Rp ' + fmt(v);
   const sum = (rows, f) => rows.reduce((s, r) => s + (Number(f(r)) || 0), 0);
+  let periode = '';   // '' = semua; atau 'YYYY-MM'
+  const inP = r => !periode || String(r.tanggal).slice(0, 7) === periode;
+  const periods = () => [...new Set([...D('transaksi'), ...D('jurnal'), ...D('distribusi')].map(r => String(r.tanggal).slice(0, 7)).filter(Boolean))].sort().reverse();
+  const KAS = ['Kas', 'Bank QRIS'];   // akun kas & bank (QRIS) dihitung sebagai kas
   const maxId = rows => Math.max(0, ...rows.map(r => Number(r.id) || 0));
   const group = (rows, by, val) => {
     const g = new Map();
@@ -19,18 +23,18 @@
   /* ---------- Model: angka turunan ---------- */
   const laporan = () => {   // laporan kas per periode, dihitung dari jurnal
     const p = new Map();
-    D('jurnal').filter(r => r.akun === 'Kas').forEach(r => {
+    D('jurnal').filter(r => KAS.includes(r.akun)).forEach(r => {
       const k = String(r.tanggal).slice(0, 7), x = p.get(k) || { periode: k, kategori: 'Semua', masuk: 0, keluar: 0, saldo: 0 };
       x.masuk += Number(r.debit) || 0; x.keluar += Number(r.kredit) || 0; x.saldo = x.masuk - x.keluar; p.set(k, x);
     });
     return [...p.values()].sort((a, b) => a.periode.localeCompare(b.periode));
   };
   const kpis = () => {
-    const trx = D('transaksi').filter(t => t.status !== 'Batal'), harga = Object.fromEntries(D('barang').map(b => [b.kode, b.harga]));
+    const trx = D('transaksi').filter(t => t.status !== 'Batal' && inP(t)), harga = Object.fromEntries(D('barang').map(b => [b.kode, b.harga]));
     return [
       ['Penjualan', rp(sum(trx.filter(t => t.jenis === 'Jual'), t => t.total))],
       ['Pembelian', rp(sum(trx.filter(t => t.jenis === 'Beli'), t => t.total))],
-      ['Saldo Kas', rp(sum(D('jurnal').filter(r => r.akun === 'Kas'), r => r.debit - r.kredit))],
+      [periode ? 'Mutasi Kas & Bank' : 'Saldo Kas & Bank', rp(sum(D('jurnal').filter(r => KAS.includes(r.akun) && inP(r)), r => r.debit - r.kredit))],
       ['Nilai Persediaan', rp(sum(D('stok'), s => s.stok * (harga[s.kode] || 0)))],
       ['Total Stok', fmt(sum(D('stok'), s => s.stok))],
       ['Transaksi', fmt(trx.length)]
@@ -45,17 +49,21 @@
     rows.map(r => `<tr>${cols.map(c => `<td>${esc(c[2] ? fmt(r[c[0]]) : r[c[0]])}</td>`).join('')}</tr>`).join('') || '<tr class="empty-row"><td colspan="9">Belum ada data.</td></tr>'}</tbody></table></div>`;
 
   const dashHtml = () => {
-    const trx = D('transaksi').filter(t => t.status !== 'Batal'), jur = D('jurnal'), lap = laporan(), lapT = [
+    const trx = D('transaksi').filter(t => t.status !== 'Batal' && inP(t)), jur = D('jurnal').filter(inP), dist = D('distribusi').filter(inP),
+      lap = laporan().filter(x => !periode || x.periode === periode), lapT = [
       { label: 'Kas Masuk', value: sum(lap, x => x.masuk) }, { label: 'Kas Keluar', value: sum(lap, x => x.keluar) }];
     return `
+      <div class="dash-filter"><label for="dash_periode">Periode</label>
+        <select id="dash_periode"><option value="">Semua periode</option>${periods().map(p => `<option value="${p}"${p === periode ? ' selected' : ''}>${p}</option>`).join('')}</select>
+        <span class="dash-note">Filter berlaku untuk transaksi, distribusi, jurnal, dan laporan. Stok adalah posisi terkini.</span></div>
       <div class="dash-top"><div class="dash-kpis">${kpis().map(([k, v]) => `<div class="kpi"><span>${k}</span><strong>${v}</strong></div>`).join('')}</div>
         <button type="button" class="btn btn-primary" data-trx>+ Transaksi Kasir</button></div>
       <div class="dash-grid">
         ${card('Barang: Stok per Barang', bar(group(D('barang'), 'nama', b => b.stok)))}
         ${card('Barang: Stok per Kategori', pie(group(D('barang'), 'kategori', b => b.stok)))}
         ${card('Lokasi: Stok per Lokasi', bar(group(D('stok'), 'lokasi', s => s.stok)))}
-        ${card('Distribusi Keluar (dari)', bar(group(D('distribusi'), 'dari', d => d.banyak)))}
-        ${card('Distribusi Masuk (ke)', bar(group(D('distribusi'), 'ke', d => d.banyak)))}
+        ${card('Distribusi Keluar (dari)', bar(group(dist, 'dari', d => d.banyak)))}
+        ${card('Distribusi Masuk (ke)', bar(group(dist, 'ke', d => d.banyak)))}
         ${card('Transaksi: Jual vs Beli', pie(group(trx, 'jenis', t => t.total)))}
         ${card('Penjualan per Customer', bar(group(trx.filter(t => t.jenis === 'Jual'), 'kontak', t => t.total)))}
         ${card('Pembelian per Vendor', bar(group(trx.filter(t => t.jenis === 'Beli'), 'kontak', t => t.total)))}
@@ -68,7 +76,7 @@
       ${table([['periode', 'Periode'], ['masuk', 'Masuk', 1], ['keluar', 'Keluar', 1], ['saldo', 'Saldo', 1]], lap)}
       <h3 class="dash-sub">Transaksi Terbaru</h3>
       ${table([['invoice', 'Invoice'], ['tanggal', 'Tanggal'], ['jenis', 'Jenis'], ['kontak', 'Kontak'], ['kasir', 'Kasir'], ['lokasi', 'Lokasi'], ['total', 'Total', 1], ['status', 'Status']],
-        [...D('transaksi')].sort((a, b) => String(b.tanggal).localeCompare(a.tanggal) || String(b.invoice).localeCompare(a.invoice)).slice(0, 8))}`;
+        D('transaksi').filter(inP).sort((a, b) => String(b.tanggal).localeCompare(a.tanggal) || String(b.invoice).localeCompare(a.invoice)).slice(0, 8))}`;
   };
 
   const sync = () => {   // tampilkan #dash hanya di menu dashboard; sisanya tetap konten tabel bawaan
@@ -101,41 +109,46 @@
 
   const put = async (key, rows) => { app.model.data[key] = rows; await app.services.save(key, rows); };
 
-  async function trxSave(e){
-    const f = new FormData(e.target), jenis = f.get('jenis'), lokasi = f.get('lokasi'), kontak = f.get('kontak'), err = app.view.showFormError;
-    const need = {}, lines = [];
-    for (let i = 0; i < 4; i++){
-      const qty = Number(f.get('qty_' + i)), b = D('barang').find(x => x.kode === f.get('kode_' + i));
-      if (qty > 0 && b){ lines.push({ kode: b.kode, banyak: qty, harga: b.harga }); need[b.kode] = (need[b.kode] || 0) + qty; }
-    }
-    if (!lines.length) return err('Isi minimal satu barang dengan qty lebih dari 0.');
-    if (!kontak) return err(`Belum ada kontak ${jenis === 'Jual' ? 'Customer' : 'Vendor'}. Tambahkan di menu Kontak.`);
-
-    const sign = jenis === 'Jual' ? -1 : 1, stok = D('stok').map(s => ({ ...s }));
+  /* Inti transaksi (dipakai form Jual/Beli dan Kasir): cek stok per lokasi, lalu tulis semua dataset terkait. */
+  async function post({ jenis, lokasi, kontak, lines, pembayaran = 'Cash' }){
+    if (!kontak) return { error: `Belum ada kontak ${jenis === 'Jual' ? 'Customer' : 'Vendor'}. Tambahkan di menu Kontak.` };
+    const need = {}, sign = jenis === 'Jual' ? -1 : 1, stok = D('stok').map(s => ({ ...s }));
+    lines.forEach(l => need[l.kode] = (need[l.kode] || 0) + l.banyak);
     for (const [kode, q] of Object.entries(need)){
       let s = stok.find(x => x.kode === kode && x.lokasi === lokasi);
       if (!s){ s = { id: maxId(stok) + 1, kode, lokasi, stok: 0 }; stok.push(s); }
-      if (sign < 0 && s.stok < q) return err(`Stok ${kode} di ${lokasi} tidak cukup (tersedia ${s.stok}, diminta ${q}).`);
+      if (sign < 0 && s.stok < q) return { error: `Stok ${kode} di ${lokasi} tidak cukup (tersedia ${s.stok}, diminta ${q}).` };
       s.stok += sign * q;
     }
-
     const pre = jenis === 'Jual' ? 'INV-JL-' : 'INV-BL-', tanggal = new Date().toISOString().slice(0, 10), total = sum(lines, l => l.banyak * l.harga);
     const no = Math.max(0, ...D('transaksi').filter(t => String(t.invoice).startsWith(pre)).map(t => parseInt(String(t.invoice).slice(pre.length)) || 0)) + 1;
-    const invoice = pre + String(no).padStart(4, '0'), [debit, kredit] = jenis === 'Jual' ? ['Kas', 'Penjualan'] : ['Persediaan', 'Kas'];
-    const jid = maxId(D('jurnal')) + 1, iid = maxId(D('item_transaksi'));
+    const invoice = pre + String(no).padStart(4, '0'), jid = maxId(D('jurnal')) + 1, iid = maxId(D('item_transaksi'));
+    const [debit, kredit] = jenis === 'Jual' ? [pembayaran === 'QRIS' ? 'Bank QRIS' : 'Kas', 'Penjualan'] : ['Persediaan', 'Kas'];
 
-    await put('transaksi', [...D('transaksi'), { invoice, tanggal, jenis, kontak, kasir: app.model.session?.nama || '-', lokasi, total, status: 'Selesai' }]);
-    await put('item_transaksi', [...D('item_transaksi'), ...lines.map((l, i) => ({ id: iid + i + 1, invoice, ...l, lokasi }))]);
+    await put('transaksi', [...D('transaksi'), { invoice, tanggal, jenis, kontak, kasir: app.model.session?.nama || '-', lokasi, pembayaran, total, status: 'Selesai' }]);
+    await put('item_transaksi', [...D('item_transaksi'), ...lines.map((l, i) => ({ id: iid + i + 1, invoice, kode: l.kode, banyak: l.banyak, harga: l.harga, lokasi }))]);
     await put('stok', stok);
     await put('barang', D('barang').map(b => need[b.kode] ? { ...b, stok: b.stok + sign * need[b.kode] } : b));
     await put('jurnal', [...D('jurnal'),
       { id: jid, tanggal, akun: debit, debit: total, kredit: 0, keterangan: invoice },
       { id: jid + 1, tanggal, akun: kredit, debit: 0, kredit: total, keterangan: invoice }]);
     await put('laporan', laporan());
+    return { invoice, total, sign };
+  }
+  app.trx = { post, rp };
 
+  async function trxSave(e){
+    const f = new FormData(e.target), jenis = f.get('jenis'), lokasi = f.get('lokasi'), lines = [];
+    for (let i = 0; i < 4; i++){
+      const qty = Number(f.get('qty_' + i)), b = D('barang').find(x => x.kode === f.get('kode_' + i));
+      if (qty > 0 && b) lines.push({ kode: b.kode, banyak: qty, harga: b.harga });
+    }
+    if (!lines.length) return app.view.showFormError('Isi minimal satu barang dengan qty lebih dari 0.');
+    const r = await post({ jenis, lokasi, kontak: f.get('kontak'), lines });
+    if (r.error) return app.view.showFormError(r.error);
     app.view.closeDrawer();
     sync();
-    app.view.notify(`${invoice} tersimpan: ${rp(total)}, stok ${lokasi} ${sign < 0 ? 'berkurang' : 'bertambah'}, jurnal tercatat.`);
+    app.view.notify(`${r.invoice} tersimpan: ${rp(r.total)}, stok ${lokasi} ${r.sign < 0 ? 'berkurang' : 'bertambah'}, jurnal tercatat.`);
   }
   app.controller.drawerHandlers.trx = { submit: trxSave, aux: () => {} };
 
@@ -146,6 +159,7 @@
     app.view.openDrawer('trx', {});
   });
   document.addEventListener('change', e => {
+    if (e.target.id === 'dash_periode'){ periode = e.target.value; return sync(); }
     if (e.target.id !== 'trx_jenis') return;
     $('trx_kontak').innerHTML = kontakOpts(e.target.value);
     $('trx_lokasi').innerHTML = lokOpts(e.target.value);

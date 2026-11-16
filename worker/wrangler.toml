@@ -1,0 +1,8 @@
+name = "sb-api"
+main = "index.js"
+compatibility_date = "2026-01-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "sb-db"
+database_id = "ISI_DENGAN_ID_D1"

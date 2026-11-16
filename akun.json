@@ -5,6 +5,11 @@
   "tipe": "Aset"
  },
  {
+  "kode": "1-110",
+  "nama": "Bank QRIS",
+  "tipe": "Aset"
+ },
+ {
   "kode": "1-200",
   "nama": "Persediaan",
   "tipe": "Aset"

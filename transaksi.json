@@ -6,6 +6,7 @@
   "kontak": "Budi Santoso",
   "kasir": "Kasir POS",
   "lokasi": "Toko Pusat",
+  "pembayaran": "Cash",
   "total": 144000,
   "status": "Selesai"
  },
@@ -16,6 +17,7 @@
   "kontak": "PT Sumber Pangan",
   "kasir": "Admin Toko",
   "lokasi": "Gudang Utama",
+  "pembayaran": "Cash",
   "total": 2880000,
   "status": "Selesai"
  }

@@ -31,7 +31,12 @@
    ============================================================= */
 window.APP_CONFIG = {
   brand: 'Uji Prinsip',
+  /* MODE DATA -- ubah di sini saja: 'offline' (IndexedDB, seed dari JSON) atau
+     'online' (API Worker + D1, lihat folder worker/). Mode aktif tampil di header. */
   mode: 'offline',
+  /* Pengaturan Kasir: lokasi penjualan, metode bayar, dan QRIS toko.
+     qris.image = path/URL/data-URL gambar QRIS statis toko (kosong = placeholder). */
+  kasir: { lokasiJenis: 'Toko', pembayaran: ['Cash', 'QRIS'], qris: { merchant: 'Toko Uji Prinsip', image: '' } },
   apiBase: '/api',
   pageSizes: [10, 50, 100],   // pilihan jumlah baris per halaman (yang pertama = bawaan)
   /* Login: offline memeriksa dataset `source` (tanpa menyimpan password
@@ -81,12 +86,14 @@ window.APP_CONFIG = {
         fields: { jenis: { type: 'select', options: ['Gudang', 'Toko'] } } }
     ] },
     { key: 'pos', label: 'POS', items: [
+      { key: 'kasir', label: 'Kasir', source: 'barang.json', pk: 'kode' },
       { key: 'transaksi', label: 'Transaksi', source: 'transaksi.json', pk: 'invoice', filters: ['jenis', 'status'],
         charts: [{ label: 'Penjualan per Kontak', by: 'kontak', value: 'total', where: { jenis: 'Jual' }, type: 'bar' },
                  { label: 'Pembelian per Kontak', by: 'kontak', value: 'total', where: { jenis: 'Beli' }, type: 'bar' },
                  { label: 'Total Jual vs Beli', by: 'jenis', value: 'total', type: 'pie' }],
         fields: { jenis: { type: 'select', options: ['Jual', 'Beli'] },
                   lokasi: { type: 'select', options: { ref: 'lokasi', key: 'nama' } },
+                  pembayaran: { type: 'select', options: ['Cash', 'QRIS'] },
                   kontak: { type: 'select', options: { ref: 'kontak', key: 'nama' } },
                   status: { type: 'select', options: ['Draft', 'Selesai', 'Batal'] } } },
       { key: 'item_transaksi', label: 'Item Transaksi', source: 'item_transaksi.json', pk: 'id', auto: true, filters: ['invoice'],
@@ -108,5 +115,6 @@ window.APP_CONFIG = {
 </script>
 <script src="app.js"></script>
 <script src="dashboard.js"></script>
+<script src="kasir.js"></script>
 </body>
 </html>
