@@ -4,6 +4,8 @@
   "tanggal": "2026-11-12",
   "jenis": "Jual",
   "kontak": "Budi Santoso",
+  "kasir": "Kasir POS",
+  "lokasi": "Toko Pusat",
   "total": 144000,
   "status": "Selesai"
  },
@@ -12,6 +14,8 @@
   "tanggal": "2026-11-10",
   "jenis": "Beli",
   "kontak": "PT Sumber Pangan",
+  "kasir": "Admin Toko",
+  "lokasi": "Gudang Utama",
   "total": 2880000,
   "status": "Selesai"
  }

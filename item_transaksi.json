@@ -1,0 +1,18 @@
+[
+ {
+  "id": 1,
+  "invoice": "INV-BL-0001",
+  "kode": "BRG-001",
+  "banyak": 40,
+  "harga": 72000,
+  "lokasi": "Gudang Utama"
+ },
+ {
+  "id": 2,
+  "invoice": "INV-JL-0001",
+  "kode": "BRG-001",
+  "banyak": 2,
+  "harga": 72000,
+  "lokasi": "Toko Pusat"
+ }
+]

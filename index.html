@@ -49,6 +49,9 @@ window.APP_CONFIG = {
        per kolom bertipe select.
      filters: kolom yang muncul sebagai saringan cepat di drawer pencarian. */
   modules: [
+    { key: 'dashboard', label: 'Dashboard', items: [
+      { key: 'dashboard', label: 'Ringkasan', source: 'laporan.json', pk: 'periode' }
+    ] },
     { key: 'master', label: 'Master', items: [
       { key: 'users', label: 'Users', source: 'users.json', pk: 'id', auto: true,
         charts: [{ label: 'User per Grup', by: 'grup', type: 'pie' },
@@ -70,6 +73,10 @@ window.APP_CONFIG = {
         fields: { kode: { type: 'select', options: { ref: 'barang', key: 'kode' } },
                   dari: { type: 'select', options: { ref: 'lokasi', key: 'nama' } },
                   ke:   { type: 'select', options: { ref: 'lokasi', key: 'nama' } } } },
+      { key: 'stok', label: 'Stok per Lokasi', source: 'stok.json', pk: 'id', auto: true, filters: ['lokasi'],
+        charts: [{ label: 'Stok per Lokasi', by: 'lokasi', value: 'stok', type: 'bar' }],
+        fields: { kode: { type: 'select', options: { ref: 'barang', key: 'kode' } },
+                  lokasi: { type: 'select', options: { ref: 'lokasi', key: 'nama' } } } },
       { key: 'lokasi', label: 'Lokasi', source: 'lokasi.json', pk: 'kode', filters: ['jenis'],
         fields: { jenis: { type: 'select', options: ['Gudang', 'Toko'] } } }
     ] },
@@ -79,8 +86,12 @@ window.APP_CONFIG = {
                  { label: 'Pembelian per Kontak', by: 'kontak', value: 'total', where: { jenis: 'Beli' }, type: 'bar' },
                  { label: 'Total Jual vs Beli', by: 'jenis', value: 'total', type: 'pie' }],
         fields: { jenis: { type: 'select', options: ['Jual', 'Beli'] },
+                  lokasi: { type: 'select', options: { ref: 'lokasi', key: 'nama' } },
                   kontak: { type: 'select', options: { ref: 'kontak', key: 'nama' } },
                   status: { type: 'select', options: ['Draft', 'Selesai', 'Batal'] } } },
+      { key: 'item_transaksi', label: 'Item Transaksi', source: 'item_transaksi.json', pk: 'id', auto: true, filters: ['invoice'],
+        fields: { kode: { type: 'select', options: { ref: 'barang', key: 'kode' } },
+                  lokasi: { type: 'select', options: { ref: 'lokasi', key: 'nama' } } } },
       { key: 'kontak', label: 'Kontak', source: 'kontak.json', pk: 'kode', filters: ['jenis'],
         charts: [{ label: 'Kontak per Jenis (Vendor / Customer)', by: 'jenis', type: 'pie' }],
         fields: { jenis: { type: 'select', options: ['Vendor', 'Customer'] } } }
@@ -96,5 +107,6 @@ window.APP_CONFIG = {
 };
 </script>
 <script src="app.js"></script>
+<script src="dashboard.js"></script>
 </body>
 </html>

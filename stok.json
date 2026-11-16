@@ -1,0 +1,44 @@
+[
+ {
+  "id": 1,
+  "kode": "BRG-001",
+  "lokasi": "Gudang Utama",
+  "stok": 30
+ },
+ {
+  "id": 2,
+  "kode": "BRG-001",
+  "lokasi": "Toko Pusat",
+  "stok": 10
+ },
+ {
+  "id": 3,
+  "kode": "BRG-002",
+  "lokasi": "Gudang Utama",
+  "stok": 65
+ },
+ {
+  "id": 4,
+  "kode": "BRG-003",
+  "lokasi": "Gudang Utama",
+  "stok": 100
+ },
+ {
+  "id": 5,
+  "kode": "BRG-003",
+  "lokasi": "Toko Pusat",
+  "stok": 20
+ },
+ {
+  "id": 6,
+  "kode": "BRG-004",
+  "lokasi": "Gudang Utama",
+  "stok": 80
+ },
+ {
+  "id": 7,
+  "kode": "BRG-005",
+  "lokasi": "Gudang Utama",
+  "stok": 55
+ }
+]
